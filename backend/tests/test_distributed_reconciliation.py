@@ -11,7 +11,12 @@ def test_reconciliation_and_transfer():
         result = run_reconciliation(session)
         session.commit()
         assert "mismatch_records" in result
+        assert result["preferred_backend"] == "oceanbase"
+        assert result["backend_mode"] in {"oceanbase-primary", "sqlite-fallback"}
         assert session.query(DistributedSyncLog).count() > 0
+        log = session.query(DistributedSyncLog).order_by(DistributedSyncLog.id.desc()).first()
+        assert log is not None
+        assert log.node_type in {"sqlite", "mysql"}
         inventory_count = session.query(Inventory).count()
         assert len(result["mismatch_records"]) < inventory_count
 

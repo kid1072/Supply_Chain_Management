@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 import json
 import shutil
 from datetime import date, datetime, timedelta
@@ -11,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.database import SessionLocal
+from app.core.database import set_sqlite_foreign_keys
 from app.models import Base
 from app.utils.datetime_utils import now_local
 from app.utils.hash_utils import hash_password
@@ -22,6 +23,19 @@ RNG = Random(20260510)
 
 def _write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _month_start(base_date: date, months_ago: int = 0) -> date:
+    year = base_date.year
+    month = base_date.month - months_ago
+    while month <= 0:
+        year -= 1
+        month += 12
+    return date(year, month, 1)
+
+
+def _safe_date(year: int, month: int, day: int) -> date:
+    return date(year, month, min(day, calendar.monthrange(year, month)[1]))
 
 
 def generate_example_data() -> dict[str, int]:
@@ -210,9 +224,10 @@ def generate_example_data() -> dict[str, int]:
                 }
             )
     monthly_sales_facts = []
-    today = date.today().replace(day=1)
+    today = date.today()
+    month_anchor = today.replace(day=1)
     for month_offset in range(12):
-        current_month = today - timedelta(days=month_offset * 30)
+        current_month = _month_start(month_anchor, month_offset)
         for row_idx in range(220):
             product = products[row_idx % len(products)]
             store = stores[row_idx % len(stores)]
@@ -374,8 +389,8 @@ def generate_example_data() -> dict[str, int]:
             }
         )
     promotions = [
-        {"promotion_name": "开学季促销", "start_date": str(today.replace(month=9 if today.month >= 9 else today.month, day=1)), "end_date": str(today.replace(month=9 if today.month >= 9 else today.month, day=20)), "store_code": "STORE-A", "product_code": "P0021", "category_name": "文具", "promo_factor": 1.3, "description": "开学季文具热销"},
-        {"promotion_name": "夏季饮料促销", "start_date": str(today.replace(month=6 if today.month >= 6 else today.month, day=1)), "end_date": str(today.replace(month=8 if today.month >= 8 else today.month, day=31)), "store_code": "STORE-B", "product_code": "P0001", "category_name": "饮料", "promo_factor": 1.4, "description": "夏季饮料销量提升"},
+        {"promotion_name": "开学季促销", "start_date": str(_safe_date(today.year, 9 if today.month >= 9 else today.month, 1)), "end_date": str(_safe_date(today.year, 9 if today.month >= 9 else today.month, 20)), "store_code": "STORE-A", "product_code": "P0021", "category_name": "文具", "promo_factor": 1.3, "description": "开学季文具热销"},
+        {"promotion_name": "夏季饮料促销", "start_date": str(_safe_date(today.year, 6 if today.month >= 6 else today.month, 1)), "end_date": str(_safe_date(today.year, 8 if today.month >= 8 else today.month, 31)), "store_code": "STORE-B", "product_code": "P0001", "category_name": "饮料", "promo_factor": 1.4, "description": "夏季饮料销量提升"},
         {"promotion_name": "中秋节促销", "start_date": str(today), "end_date": str(today + timedelta(days=10)), "store_code": "STORE-C", "product_code": None, "category_name": "零食", "promo_factor": 1.2, "description": "节日礼盒促销"},
         {"promotion_name": "双十一促销", "start_date": str(today), "end_date": str(today + timedelta(days=5)), "store_code": "STORE-D", "product_code": None, "category_name": "日用品", "promo_factor": 1.5, "description": "双十一爆品活动"},
         {"promotion_name": "冬季日用品促销", "start_date": str(today), "end_date": str(today + timedelta(days=30)), "store_code": "STORE-E", "product_code": "P0017", "category_name": "日用品", "promo_factor": 1.15, "description": "冬季消耗品备货"},
@@ -452,16 +467,18 @@ def load_example_data(db: Session) -> dict[str, int]:
     supplier_score_snapshots = _load_json("supplier_score_snapshots.json")
     promotions = _load_json("promotions.json")
 
-    db.execute(text("PRAGMA foreign_keys=OFF"))
+    set_sqlite_foreign_keys(db, enabled=False)
     business_models = [
         AIRecommendation, MonthlySalesFact, Promotion, SupplierScoreSnapshot, CrossWarehouseTransferOrder, DistributedSyncLog,
         StockTransaction, OutboundItem, InboundItem, PurchaseOrderItem, OutboundOrder, InboundOrder, ReplenishmentRequest,
         PurchaseOrder, Inventory, SupplierProduct, Product, Category, Supplier, Store, Warehouse
     ]
-    for model in business_models:
-        db.query(model).delete()
-    db.query(User).filter(User.username.notin_(["admin", "buyer", "warehouse", "store", "manager"])).delete()
-    db.execute(text("PRAGMA foreign_keys=ON"))
+    try:
+        for model in business_models:
+            db.query(model).delete()
+        db.query(User).filter(User.username.notin_(["admin", "buyer", "warehouse", "store", "manager"])).delete()
+    finally:
+        set_sqlite_foreign_keys(db, enabled=True)
     db.flush()
 
     category_map = {}

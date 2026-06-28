@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.cache import invalidate_business_cache
+from app.core.database import get_database_dialect_name, get_database_runtime_profile
 from app.models.distributed import DistributedSyncLog
 from app.models.inventory import Inventory
 from app.models.store import Store
@@ -16,6 +17,7 @@ from app.utils.datetime_utils import now_local
 
 
 def overview(db: Session) -> dict:
+    runtime_profile = get_database_runtime_profile(db)
     warehouses = list(db.scalars(select(Warehouse)))
     stores = list(db.scalars(select(Store)))
     inventory_rows = list(db.scalars(select(Inventory)))
@@ -32,6 +34,7 @@ def overview(db: Session) -> dict:
     for store in stores:
         by_region[store.region or "未知"] += by_store[store.id]
     return {
+        "backend": runtime_profile,
         "warehouses": [{"warehouse_id": wh.id, "warehouse_code": wh.warehouse_code, "quantity": by_warehouse[wh.id]} for wh in warehouses],
         "stores": [{"store_id": st.id, "store_code": st.store_code, "quantity": by_store[st.id]} for st in stores],
         "regions": [{"region": region, "quantity": qty} for region, qty in by_region.items()],
@@ -39,6 +42,7 @@ def overview(db: Session) -> dict:
 
 
 def run_reconciliation(db: Session) -> dict:
+    runtime_profile = get_database_runtime_profile(db)
     started_at = now_local()
     checked = 0
     mismatch_records = []
@@ -71,20 +75,26 @@ def run_reconciliation(db: Session) -> dict:
                 }
             )
     log = DistributedSyncLog(
-        node_name="main-node",
-        node_type="sqlite",
-        region="global",
+        node_name="oceanbase-primary-node" if runtime_profile["mode"] == "oceanbase-primary" else "sqlite-fallback-node",
+        node_type=get_database_dialect_name(db),
+        region="distributed-core",
         sync_type="reconciliation",
         status="completed",
         checked_records=checked,
         mismatch_records=len(mismatch_records),
         started_at=started_at,
         finished_at=now_local(),
-        message="reconciliation finished",
+        message=f"reconciliation finished on {runtime_profile['mode']}",
     )
     db.add(log)
     db.flush()
-    return {"checked_records": checked, "mismatch_records": mismatch_records, "log_id": log.id}
+    return {
+        "checked_records": checked,
+        "mismatch_records": mismatch_records,
+        "log_id": log.id,
+        "backend_mode": runtime_profile["mode"],
+        "preferred_backend": runtime_profile["preferred_backend"],
+    }
 
 
 def get_sync_logs(db: Session) -> list[DistributedSyncLog]:

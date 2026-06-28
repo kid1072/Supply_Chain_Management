@@ -28,9 +28,11 @@ def sync_logs(db: Session = Depends(get_db_dep)):
             {
                 "id": item.id,
                 "node_name": item.node_name,
+                "node_type": item.node_type,
                 "status": item.status,
                 "checked_records": item.checked_records,
                 "mismatch_records": item.mismatch_records,
+                "message": item.message,
             }
             for item in items
         ]

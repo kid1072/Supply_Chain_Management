@@ -5,9 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sqlalchemy import text
-
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, set_sqlite_foreign_keys
 from app.models.analytics import MonthlySalesFact, Promotion, SupplierScoreSnapshot
 from app.models.distributed import CrossWarehouseTransferOrder, DistributedSyncLog
 from app.models.inbound import InboundItem, InboundOrder
@@ -26,32 +24,34 @@ from app.models.warehouse import Warehouse
 if __name__ == "__main__":
     session = SessionLocal()
     try:
-        session.execute(text("PRAGMA foreign_keys=OFF"))
-        for model in [
-            AIRecommendation,
-            MonthlySalesFact,
-            Promotion,
-            SupplierScoreSnapshot,
-            DistributedSyncLog,
-            CrossWarehouseTransferOrder,
-            StockTransaction,
-            ReplenishmentRequest,
-            OutboundItem,
-            OutboundOrder,
-            InboundItem,
-            InboundOrder,
-            PurchaseOrderItem,
-            PurchaseOrder,
-            Inventory,
-            SupplierProduct,
-            Product,
-            Category,
-            Supplier,
-            Store,
-            Warehouse,
-        ]:
-            session.query(model).delete()
-        session.execute(text("PRAGMA foreign_keys=ON"))
+        set_sqlite_foreign_keys(session, enabled=False)
+        try:
+            for model in [
+                AIRecommendation,
+                MonthlySalesFact,
+                Promotion,
+                SupplierScoreSnapshot,
+                DistributedSyncLog,
+                CrossWarehouseTransferOrder,
+                StockTransaction,
+                ReplenishmentRequest,
+                OutboundItem,
+                OutboundOrder,
+                InboundItem,
+                InboundOrder,
+                PurchaseOrderItem,
+                PurchaseOrder,
+                Inventory,
+                SupplierProduct,
+                Product,
+                Category,
+                Supplier,
+                Store,
+                Warehouse,
+            ]:
+                session.query(model).delete()
+        finally:
+            set_sqlite_foreign_keys(session, enabled=True)
         session.commit()
     finally:
         session.close()

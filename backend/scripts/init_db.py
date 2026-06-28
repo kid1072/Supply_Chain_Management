@@ -11,7 +11,7 @@ if str(ROOT) not in sys.path:
 from sqlalchemy.schema import CreateTable
 
 from app.core.config import get_settings
-from app.core.database import SessionLocal, engine
+from app.core.database import SessionLocal, engine, get_active_database_url
 from app.models import Base
 from app.models.user import User
 from app.utils.hash_utils import hash_password
@@ -44,11 +44,19 @@ def export_seed_sql(seed_path: Path) -> None:
 def init_db(rebuild: bool = False) -> None:
     settings = get_settings()
     settings.schema_dir_path.mkdir(parents=True, exist_ok=True)
-    if rebuild and settings.database_path.exists():
-        settings.database_path.unlink()
+    active_database_url = get_active_database_url()
+    active_is_sqlite = active_database_url.startswith("sqlite")
+    if active_is_sqlite:
+        database_path = settings.resolve_sqlite_path(active_database_url)
+        if rebuild and database_path.exists():
+            engine.dispose()
+            database_path.unlink()
+    elif rebuild:
+        Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
-    export_schema_sql(settings.schema_dir_path / "schema.sql")
-    export_seed_sql(settings.schema_dir_path / "seed.sql")
+    if active_is_sqlite:
+        export_schema_sql(settings.schema_dir_path / "schema.sql")
+        export_seed_sql(settings.schema_dir_path / "seed.sql")
     session = SessionLocal()
     try:
         existing = {row.username for row in session.query(User).all()}

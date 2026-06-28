@@ -1,8 +1,8 @@
 [
   {
     "promotion_name": "开学季促销",
-    "start_date": "2026-05-01",
-    "end_date": "2026-05-20",
+    "start_date": "2026-06-01",
+    "end_date": "2026-06-20",
     "store_code": "STORE-A",
     "product_code": "P0021",
     "category_name": "文具",
@@ -11,8 +11,8 @@
   },
   {
     "promotion_name": "夏季饮料促销",
-    "start_date": "2026-05-01",
-    "end_date": "2026-05-31",
+    "start_date": "2026-06-01",
+    "end_date": "2026-06-30",
     "store_code": "STORE-B",
     "product_code": "P0001",
     "category_name": "饮料",
@@ -21,8 +21,8 @@
   },
   {
     "promotion_name": "中秋节促销",
-    "start_date": "2026-05-01",
-    "end_date": "2026-05-11",
+    "start_date": "2026-06-28",
+    "end_date": "2026-07-08",
     "store_code": "STORE-C",
     "product_code": null,
     "category_name": "零食",
@@ -31,8 +31,8 @@
   },
   {
     "promotion_name": "双十一促销",
-    "start_date": "2026-05-01",
-    "end_date": "2026-05-06",
+    "start_date": "2026-06-28",
+    "end_date": "2026-07-03",
     "store_code": "STORE-D",
     "product_code": null,
     "category_name": "日用品",
@@ -41,8 +41,8 @@
   },
   {
     "promotion_name": "冬季日用品促销",
-    "start_date": "2026-05-01",
-    "end_date": "2026-05-31",
+    "start_date": "2026-06-28",
+    "end_date": "2026-07-28",
     "store_code": "STORE-E",
     "product_code": "P0017",
     "category_name": "日用品",

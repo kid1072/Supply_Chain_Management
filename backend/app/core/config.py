@@ -10,7 +10,9 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 class Settings(BaseSettings):
     app_name: str = "供应链库存协同与智能补货管理系统"
     app_env: str = "dev"
-    database_url: str = "sqlite:///./schema/supply_chain.db"
+    database_url: str = "mysql+pymysql://root:@127.0.0.1:2881/supply_chain?charset=utf8mb4"
+    sqlite_fallback_url: str = "sqlite:///./schema/supply_chain.db"
+    database_connect_timeout_seconds: int = 3
     example_data_dir: str = "./example"
 
     llm_provider: str = "rule"
@@ -31,9 +33,22 @@ class Settings(BaseSettings):
     )
 
     @property
-    def database_path(self) -> Path:
-        raw = self.database_url.replace("sqlite:///", "", 1)
+    def is_sqlite(self) -> bool:
+        return self.database_url.startswith("sqlite")
+
+    def resolve_sqlite_path(self, database_url: str) -> Path:
+        if not database_url.startswith("sqlite"):
+            raise ValueError("resolve_sqlite_path is only available for SQLite DATABASE_URL")
+        raw = database_url.replace("sqlite:///", "", 1)
         return (BASE_DIR / raw.replace("./", "", 1)).resolve()
+
+    @property
+    def database_path(self) -> Path:
+        return self.resolve_sqlite_path(self.database_url)
+
+    @property
+    def sqlite_fallback_path(self) -> Path:
+        return self.resolve_sqlite_path(self.sqlite_fallback_url)
 
     @property
     def example_dir_path(self) -> Path:
@@ -41,7 +56,7 @@ class Settings(BaseSettings):
 
     @property
     def schema_dir_path(self) -> Path:
-        return self.database_path.parent
+        return (BASE_DIR / "schema").resolve()
 
 
 @lru_cache
