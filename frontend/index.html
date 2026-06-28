@@ -20,10 +20,11 @@
           </div>
           <div>
             <strong>Supply Chain</strong>
-            <small>库存 · 流转 · 补货</small>
+            <small>库存协同管理平台</small>
           </div>
         </div>
 
+        <p class="nav-label">业务模块</p>
         <nav class="side-nav" aria-label="演示模块导航">
           <button class="nav-item active" type="button" data-view="dashboard">
             <span class="nav-index">01</span><span>首页看板</span>
@@ -51,12 +52,6 @@
           </button>
         </nav>
 
-        <div class="sidebar-manifest" aria-hidden="true">
-          <span>TODAY'S NOTE</span>
-          <strong>别让库存失踪。</strong>
-          <div class="manifest-barcode"></div>
-        </div>
-
         <div class="sidebar-status">
           <div class="status-line">
             <span class="status-dot is-checking" id="globalStatusDot"></span>
@@ -79,8 +74,8 @@
             ☰
           </button>
           <div>
-            <p class="header-kicker">SUPPLY · STOCK · FLOW</p>
-            <h1 id="pageTitle">首页看板</h1>
+            <p class="header-kicker">智能供应链 · 实时协同</p>
+            <h1 id="pageTitle">供应链库存协同与智能补货管理系统</h1>
           </div>
           <div class="header-actions">
             <div class="live-chip">
@@ -88,7 +83,7 @@
               <span>数据在线</span>
             </div>
             <button class="btn btn-primary app-btn" id="refreshCurrentBtn" type="button">
-              <span class="btn-label">刷新当前模块</span>
+              <span class="btn-label">刷新数据</span>
             </button>
           </div>
         </header>
@@ -99,89 +94,91 @@
           <section class="app-view active" id="view-dashboard" data-title="首页看板">
             <div class="hero-panel">
               <div>
-                <span class="section-tag">OVERVIEW / 今日总览</span>
-                <h2>今天，货物都去哪儿了？</h2>
-                <p>把仓库、门店和补货建议摊开来看——每一次库存变化，都有迹可循。</p>
+                <span class="section-tag">OVERVIEW</span>
+                <h2>核心库存与业务指标总览</h2>
+                <p>统一查看库存规模、风险预警、近期出库与智能补货建议。</p>
               </div>
               <div class="hero-meta">
                 <span>数据更新时间</span>
                 <strong id="dashboardUpdatedAt">--</strong>
               </div>
               <div class="route-markers" aria-hidden="true">
-                <span>供应商</span><i></i><span>仓库</span><i></i><span>门店</span>
+                <span>实时监控</span><i></i><span>风险发现</span><i></i><span>智能建议</span><i></i><span>业务协同</span>
               </div>
             </div>
 
-            <div class="metric-grid">
+            <div class="metric-grid primary-metrics">
               <article class="metric-card accent-blue">
-                <span class="metric-label">商品数</span>
+                <span class="metric-label">在库商品总数</span>
                 <strong id="metricProducts">--</strong>
-                <small>在管商品</small>
+                <small>当前纳入库存管理的商品</small>
               </article>
               <article class="metric-card accent-cyan">
-                <span class="metric-label">供应商数</span>
+                <span class="metric-label">合作供应商规模</span>
                 <strong id="metricSuppliers">--</strong>
-                <small>合作伙伴</small>
-              </article>
-              <article class="metric-card accent-violet">
-                <span class="metric-label">仓库 / 门店</span>
-                <strong><span id="metricWarehouses">--</span><i>/</i><span id="metricStores">--</span></strong>
-                <small>履约网络节点</small>
-              </article>
-              <article class="metric-card accent-green">
-                <span class="metric-label">库存总量</span>
-                <strong id="metricInventory">--</strong>
-                <small>当前库存件数</small>
+                <small>已接入协同采购网络</small>
               </article>
               <article class="metric-card accent-red">
-                <span class="metric-label">缺货预警</span>
-                <strong id="metricStockout">--</strong>
-                <small>需要优先处理</small>
-              </article>
-              <article class="metric-card accent-amber">
-                <span class="metric-label">积压预警</span>
-                <strong id="metricOverstock">--</strong>
-                <small>库存占用风险</small>
-              </article>
-              <article class="metric-card accent-indigo">
-                <span class="metric-label">近期出库量</span>
-                <strong id="metricOutbound">--</strong>
-                <small>近期履约规模</small>
+                <span class="metric-label">库存异常监控预警</span>
+                <strong id="metricWarnings">--</strong>
+                <small><span id="metricStockout">--</span> 条缺货 · <span id="metricOverstock">--</span> 条积压</small>
               </article>
               <article class="metric-card accent-pink">
-                <span class="metric-label">AI 建议</span>
+                <span class="metric-label">智能采购补货建议</span>
                 <strong id="metricRecommendations">--</strong>
-                <small><span id="metricHighRisk">--</span> 条高风险</small>
+                <small>其中 <span id="metricHighRisk">--</span> 条高风险建议</small>
               </article>
             </div>
 
-            <div class="layout-grid dashboard-grid">
-              <article class="content-card chart-card">
-                <div class="card-heading">
-                  <div>
-                    <span class="section-tag">INVENTORY RANKING</span>
-                    <h3>商品库存排行</h3>
-                  </div>
-                  <span class="soft-badge">Top 10</span>
-                </div>
-                <div class="chart-box" id="dashboardInventoryChart">
-                  <div class="loading-placeholder">正在加载图表…</div>
-                </div>
-              </article>
+            <div class="secondary-metrics" aria-label="供应链次级指标">
+              <div><span>仓库节点</span><strong id="metricWarehouses">--</strong></div>
+              <div><span>门店节点</span><strong id="metricStores">--</strong></div>
+              <div><span>库存总量</span><strong id="metricInventory">--</strong></div>
+              <div><span>近期出库量</span><strong id="metricOutbound">--</strong></div>
+            </div>
 
+            <div class="layout-grid operations-grid">
               <article class="content-card risk-card">
                 <div class="card-heading">
                   <div>
-                    <span class="section-tag">RISK RADAR</span>
-                    <h3>重点库存风险</h3>
+                    <span class="section-tag">INVENTORY ALERTS</span>
+                    <h3>当前库存异常警告</h3>
                   </div>
-                  <button class="text-action" type="button" data-jump="warnings">查看全部 →</button>
+                  <button class="text-action" type="button" data-jump="warnings">查看完整预警清单 →</button>
                 </div>
+                <p class="card-description">自动检测库存量与安全线偏离，优先展示需要处理的商品。</p>
                 <div class="compact-list" id="dashboardRiskList">
                   <div class="empty-block">正在读取预警信息…</div>
                 </div>
               </article>
+
+              <article class="content-card recommendation-preview-card">
+                <div class="card-heading">
+                  <div>
+                    <span class="section-tag">SMART REPLENISHMENT</span>
+                    <h3>核心补货协同建议</h3>
+                  </div>
+                  <button class="text-action" type="button" data-jump="recommendations">进入智能补货中心 →</button>
+                </div>
+                <p class="card-description">依据库存、安全线与近期出库量，给出优先补货对象与数量。</p>
+                <div class="dashboard-recommendation-list" id="dashboardRecommendationList">
+                  <div class="empty-block">正在读取补货建议…</div>
+                </div>
+              </article>
             </div>
+
+            <article class="content-card dashboard-ranking-card">
+              <div class="card-heading">
+                <div>
+                  <span class="section-tag">INVENTORY RANKING</span>
+                  <h3>商品库存排行</h3>
+                </div>
+                <span class="soft-badge">Top 10</span>
+              </div>
+              <div class="chart-box" id="dashboardInventoryChart">
+                <div class="loading-placeholder">正在加载图表…</div>
+              </div>
+            </article>
           </section>
 
           <section class="app-view" id="view-warnings" data-title="库存查询与预警">

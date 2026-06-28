@@ -245,10 +245,11 @@
   }
 
   async function loadDashboard() {
-    const [dashboard, ranking, warnings] = await Promise.all([
+    const [dashboard, ranking, warnings, recommendations] = await Promise.all([
       API.getDashboard(),
       API.getInventoryRanking(),
       API.getWarnings(),
+      API.getRecommendations(),
     ]);
     setText("metricProducts", formatNumber(dashboard.product_count));
     setText("metricSuppliers", formatNumber(dashboard.supplier_count));
@@ -257,6 +258,10 @@
     setText("metricInventory", formatNumber(dashboard.total_inventory_quantity));
     setText("metricStockout", formatNumber(dashboard.stockout_count));
     setText("metricOverstock", formatNumber(dashboard.overstock_count));
+    setText(
+      "metricWarnings",
+      formatNumber(Number(dashboard.stockout_count || 0) + Number(dashboard.overstock_count || 0)),
+    );
     setText("metricOutbound", formatNumber(dashboard.recent_outbound_quantity));
     setText("metricRecommendations", formatNumber(dashboard.ai_recommendation_count));
     setText("metricHighRisk", formatNumber(dashboard.high_risk_recommendation_count));
@@ -287,8 +292,8 @@
           itemStyle: {
             borderRadius: [0, 7, 7, 0],
             color: new window.echarts.graphic.LinearGradient(0, 0, 1, 0, [
-              { offset: 0, color: "#ff6b7a" },
-              { offset: 1, color: "#ffd166" },
+              { offset: 0, color: "#5667e8" },
+              { offset: 1, color: "#8b7cf6" },
             ]),
           },
         },
@@ -296,6 +301,7 @@
     });
 
     renderDashboardRisks(listItems(warnings));
+    renderDashboardRecommendations(listItems(recommendations));
   }
 
   function renderDashboardRisks(rows) {
@@ -317,6 +323,33 @@
             <div class="risk-value">
               <strong>${formatNumber(item.available_quantity ?? item.current_quantity)}</strong>
               <small>安全 ${formatNumber(item.safety_stock)}</small>
+            </div>
+          </div>`,
+      )
+      .join("");
+  }
+
+  function renderDashboardRecommendations(rows) {
+    const target = $("dashboardRecommendationList");
+    if (!rows.length) {
+      target.innerHTML = '<div class="empty-block">暂无补货建议</div>';
+      return;
+    }
+    const riskOrder = { high: 0, medium: 1, low: 2 };
+    target.innerHTML = [...rows]
+      .sort((a, b) => (riskOrder[a.risk_level] ?? 3) - (riskOrder[b.risk_level] ?? 3))
+      .slice(0, 4)
+      .map(
+        (item) => `
+          <div class="dashboard-recommendation">
+            <div>
+              ${statusBadge(item.risk_level)}
+              <strong>${escapeHtml(productName(item.product_id))}</strong>
+              <small>${escapeHtml(storeName(item.store_id))}</small>
+            </div>
+            <div class="dashboard-recommendation-quantity">
+              <span>建议补货</span>
+              <strong>${formatNumber(item.recommended_quantity)}</strong>
             </div>
           </div>`,
       )
@@ -570,7 +603,7 @@
           type: "bar",
           data: rankingRows.slice(0, 8).map((item) => item.score),
           barWidth: 13,
-          itemStyle: { color: "#52cbb0", borderRadius: [7, 7, 7, 7] },
+          itemStyle: { color: "#7567e8", borderRadius: [5, 5, 5, 5] },
         },
       ],
     });
@@ -598,9 +631,9 @@
           type: "line",
           smooth: true,
           data: trendRows.map((item) => Number(item.warehouse_sales || 0)),
-          lineStyle: { color: "#7c5cff", width: 3 },
-          itemStyle: { color: "#ff6b7a" },
-          areaStyle: { color: "rgba(124, 92, 255, .10)" },
+          lineStyle: { color: "#22a981", width: 3 },
+          itemStyle: { color: "#5667e8" },
+          areaStyle: { color: "rgba(34, 169, 129, .10)" },
         },
       ],
     });
