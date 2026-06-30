@@ -448,6 +448,7 @@ def load_example_data(db: Session) -> dict[str, int]:
     from app.models.transaction import StockTransaction
     from app.models.user import User
     from app.models.warehouse import Warehouse
+    from app.models.walmart import WalmartStoreProfile, WalmartWeeklySalesFact
 
     categories = _load_json("categories.json")
     products = _load_json("products.json")
@@ -469,14 +470,14 @@ def load_example_data(db: Session) -> dict[str, int]:
 
     set_sqlite_foreign_keys(db, enabled=False)
     business_models = [
+        WalmartWeeklySalesFact, WalmartStoreProfile,
         AIRecommendation, MonthlySalesFact, Promotion, SupplierScoreSnapshot, CrossWarehouseTransferOrder, DistributedSyncLog,
         StockTransaction, OutboundItem, InboundItem, PurchaseOrderItem, OutboundOrder, InboundOrder, ReplenishmentRequest,
-        PurchaseOrder, Inventory, SupplierProduct, Product, Category, Supplier, Store, Warehouse
+        PurchaseOrder, Inventory, SupplierProduct, Product, Category, Supplier, User, Store, Warehouse
     ]
     try:
         for model in business_models:
             db.query(model).delete()
-        db.query(User).filter(User.username.notin_(["admin", "buyer", "warehouse", "store", "manager"])).delete()
     finally:
         set_sqlite_foreign_keys(db, enabled=True)
     db.flush()
@@ -537,7 +538,6 @@ def load_example_data(db: Session) -> dict[str, int]:
         db.flush()
         store_map[item["store_code"]] = store
     user_map = {}
-    db.query(User).delete()
     for item in users:
         user = User(
             username=item["username"],

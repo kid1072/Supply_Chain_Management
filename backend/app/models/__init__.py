@@ -13,6 +13,7 @@ from app.models.supplier import Supplier, SupplierProduct
 from app.models.transaction import StockTransaction
 from app.models.user import User
 from app.models.warehouse import Warehouse
+from app.models.walmart import WalmartStoreProfile, WalmartWeeklySalesFact
 
 __all__ = [
     "AIRecommendation",
@@ -38,4 +39,6 @@ __all__ = [
     "SupplierScoreSnapshot",
     "User",
     "Warehouse",
+    "WalmartStoreProfile",
+    "WalmartWeeklySalesFact",
 ]

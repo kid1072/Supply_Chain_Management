@@ -1,5 +1,16 @@
 # Supply_Chain_Management
 
+## Real Walmart Import
+
+后端现在支持从本地 Walmart 数据集导入真实销售额，并同时兼容：
+
+- 标准 `train.csv + features.csv + stores.csv`
+- 当前仓库实际提供的 M5 `sales_train_validation.csv + calendar.csv + sell_prices.csv`
+
+导入命令、字段映射、OceanBase/SQLite 验证方式和数据边界见：
+
+- [Walmart 数据接入说明](docs/Walmart数据接入说明.md)
+
 供应链库存协同与智能补货管理系统。这个项目面向数据库课程期末演示，围绕“采购入库 → 库存变更 → 门店补货 → 审核流转 → 出库发货 → 门店签收 → AI 补货建议 → 统计分析”搭建了一条可完整演示的业务闭环。
 
 当前版本采用：
