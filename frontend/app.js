@@ -95,6 +95,7 @@
     purchase_inbound: "采购入库",
     outbound: "出库",
     store_outbound: "门店补货出库",
+    store_inbound: "门店签收入库",
     adjustment: "库存调整",
     inbound_order: "入库单",
     outbound_order: "出库单",
@@ -118,9 +119,14 @@
     currentRole: null,
     currentUser: null,
     currentView: "dashboard",
+    inventoryTab: "overview",
+    inventoryOverviewPage: 1,
     eventsBound: false,
     lookupsLoaded: false,
     loadedViews: new Set(),
+    loadedInventoryTabs: new Set(),
+    inventoryOverviewRows: [],
+    inventoryWarningRows: [],
     products: new Map(),
     suppliers: new Map(),
     warehouses: new Map(),
@@ -129,6 +135,7 @@
   };
 
   const $ = (id) => document.getElementById(id);
+  const INVENTORY_OVERVIEW_PAGE_SIZE = 20;
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -374,6 +381,191 @@
     return nameFrom(state.stores, id, "门店");
   }
 
+  function locationName(item) {
+    if (!item) return "--";
+    if (item.location_name) return item.location_name;
+    return item.location_type === "warehouse"
+      ? warehouseName(item.warehouse_id)
+      : storeName(item.store_id);
+  }
+
+  function availableQuantity(item) {
+    const directValue = Number(item?.available_quantity);
+    if (Number.isFinite(directValue)) return directValue;
+    return Number(item?.current_quantity || 0) - Number(item?.frozen_quantity || 0);
+  }
+
+  function inventoryLocationKey(item) {
+    if (!item) return "";
+    if (item.location_type === "warehouse" && item.warehouse_id) {
+      return `warehouse:${item.warehouse_id}`;
+    }
+    if (item.location_type === "store" && item.store_id) {
+      return `store:${item.store_id}`;
+    }
+    return "";
+  }
+
+  function inventoryLocationLabel(item) {
+    if (!item) return "--";
+    return locationName(item);
+  }
+
+  function sortInventoryRows(rows) {
+    return [...rows].sort((left, right) => {
+      const typeCompare = String(left.location_type || "").localeCompare(String(right.location_type || ""), "zh-CN");
+      if (typeCompare !== 0) return typeCompare;
+      const locationCompare = locationName(left).localeCompare(locationName(right), "zh-CN");
+      if (locationCompare !== 0) return locationCompare;
+      const productCompare = String(left.product_name || productName(left.product_id)).localeCompare(
+        String(right.product_name || productName(right.product_id)),
+        "zh-CN",
+      );
+      if (productCompare !== 0) return productCompare;
+      return Number(left.id || 0) - Number(right.id || 0);
+    });
+  }
+
+  function refreshInventoryLocationFilter() {
+    const select = $("inventoryLocationFilter");
+    if (!select) return "all";
+
+    const locationType = $("inventoryLocationTypeFilter")?.value || "all";
+    const previousValue = select.value || "all";
+    const placeholder =
+      locationType === "warehouse"
+        ? "全部仓库"
+        : locationType === "store"
+          ? "全部门店"
+          : "全部仓库与门店";
+
+    const locationMap = new Map();
+    state.inventoryOverviewRows.forEach((item) => {
+      if (locationType !== "all" && item.location_type !== locationType) return;
+      const key = inventoryLocationKey(item);
+      if (!key || locationMap.has(key)) return;
+      locationMap.set(key, {
+        key,
+        label: inventoryLocationLabel(item),
+      });
+    });
+
+    const options = [`<option value="all">${escapeHtml(placeholder)}</option>`];
+    sortInventoryRows(
+      [...locationMap.values()].map((entry) => {
+        const [type, id] = entry.key.split(":");
+        return {
+          location_type: type,
+          warehouse_id: type === "warehouse" ? Number(id) : null,
+          store_id: type === "store" ? Number(id) : null,
+          location_name: entry.label,
+        };
+      }),
+    ).forEach((item) => {
+      const key = inventoryLocationKey(item);
+      options.push(`<option value="${escapeHtml(key)}">${escapeHtml(inventoryLocationLabel(item))}</option>`);
+    });
+
+    select.innerHTML = options.join("");
+    select.value = locationMap.has(previousValue) ? previousValue : "all";
+    return select.value;
+  }
+
+  function renderInventoryLocationSummary(rows) {
+    const target = $("inventoryLocationSummary");
+    if (!target) return;
+    const selectedKey = $("inventoryLocationFilter")?.value || "all";
+    if (selectedKey === "all") {
+      target.hidden = true;
+      target.innerHTML = "";
+      return;
+    }
+
+    const matchedRows = rows.filter((item) => inventoryLocationKey(item) === selectedKey);
+    if (!matchedRows.length) {
+      target.hidden = true;
+      target.innerHTML = "";
+      return;
+    }
+
+    const summary = {
+      label: locationName(matchedRows[0]),
+      locationType: label(matchedRows[0].location_type),
+      skuCount: 0,
+      currentQuantity: 0,
+      availableQuantity: 0,
+    };
+
+    matchedRows.forEach((item) => {
+      summary.skuCount += 1;
+      summary.currentQuantity += Number(item.current_quantity || 0);
+      summary.availableQuantity += availableQuantity(item);
+    });
+
+    target.hidden = false;
+    target.innerHTML = `
+      <article class="inventory-location-card">
+        <div class="inventory-location-top">
+          <strong>${escapeHtml(summary.label)}</strong>
+          <span class="soft-badge">${escapeHtml(summary.locationType)}</span>
+        </div>
+        <div class="inventory-location-metrics">
+          <div><span>商品数</span><strong>${formatNumber(summary.skuCount)}</strong></div>
+          <div><span>当前库存</span><strong>${formatNumber(summary.currentQuantity)}</strong></div>
+          <div><span>可用库存</span><strong>${formatNumber(summary.availableQuantity)}</strong></div>
+        </div>
+      </article>`;
+  }
+
+  function renderInventoryPagination(total) {
+    const container = $("inventoryOverviewPagination");
+    const prevButton = $("inventoryPrevPageBtn");
+    const nextButton = $("inventoryNextPageBtn");
+    if (!container || !prevButton || !nextButton) return;
+
+    const totalPages = Math.max(1, Math.ceil(total / INVENTORY_OVERVIEW_PAGE_SIZE));
+    const currentPage = Math.min(state.inventoryOverviewPage, totalPages);
+    state.inventoryOverviewPage = currentPage;
+
+    if (total <= INVENTORY_OVERVIEW_PAGE_SIZE) {
+      container.hidden = true;
+      setText("inventoryPageInfo", `第 1 / 1 页`);
+      prevButton.disabled = true;
+      nextButton.disabled = true;
+      return;
+    }
+
+    container.hidden = false;
+    setText("inventoryPageInfo", `第 ${currentPage} / ${totalPages} 页 · 共 ${total} 条`);
+    prevButton.disabled = currentPage <= 1;
+    nextButton.disabled = currentPage >= totalPages;
+  }
+
+  function setInventoryOverviewPage(page) {
+    const safePage = Math.max(1, Number(page || 1));
+    if (state.inventoryOverviewPage === safePage) return;
+    state.inventoryOverviewPage = safePage;
+    renderInventoryOverview();
+  }
+
+  function getInventoryOverviewBaseRows() {
+    const keyword = String($("inventoryKeywordInput")?.value || "")
+      .trim()
+      .toLowerCase();
+    const locationType = $("inventoryLocationTypeFilter")?.value || "all";
+    return sortInventoryRows(
+      state.inventoryOverviewRows.filter((item) => {
+        const matchesKeyword =
+          !keyword ||
+          String(item.product_name || productName(item.product_id))
+            .toLowerCase()
+            .includes(keyword);
+        const matchesType = locationType === "all" || item.location_type === locationType;
+        return matchesKeyword && matchesType;
+      }),
+    );
+  }
+
   function statusBadge(status) {
     return `<span class="status-badge status-${escapeHtml(status || "unknown")}">${escapeHtml(label(status))}</span>`;
   }
@@ -384,6 +576,18 @@
 
   function permissionNote() {
     return '<span class="permission-note">当前角色无权限操作</span>';
+  }
+
+  function setInventoryTab(tabName) {
+    state.inventoryTab = tabName;
+    document.querySelectorAll("[data-inventory-tab]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.inventoryTab === tabName);
+    });
+    document.querySelectorAll("[data-inventory-panel]").forEach((panel) => {
+      const active = panel.dataset.inventoryPanel === tabName;
+      panel.hidden = !active;
+      panel.classList.toggle("active", active);
+    });
   }
 
   async function loadLookups(force = false) {
@@ -601,9 +805,51 @@
       .join("");
   }
 
-  async function loadWarnings() {
+  function renderInventoryOverview() {
+    refreshInventoryLocationFilter();
+    const rows = getInventoryOverviewBaseRows();
+    renderInventoryLocationSummary(rows);
+
+    const total = rows.length;
+    const totalPages = Math.max(1, Math.ceil(total / INVENTORY_OVERVIEW_PAGE_SIZE));
+    if (state.inventoryOverviewPage > totalPages) {
+      state.inventoryOverviewPage = totalPages;
+    }
+    const startIndex = (state.inventoryOverviewPage - 1) * INVENTORY_OVERVIEW_PAGE_SIZE;
+    const pagedRows = rows.slice(startIndex, startIndex + INVENTORY_OVERVIEW_PAGE_SIZE);
+
+    setText("inventoryOverviewResultBadge", `共 ${total} 条记录`);
+    $("inventoryOverviewTableBody").innerHTML = pagedRows.length
+      ? pagedRows
+          .map(
+            (item) => `
+              <tr>
+                <td><strong>${escapeHtml(item.product_name || productName(item.product_id))}</strong><small class="cell-subtitle">ID ${escapeHtml(item.product_id)}</small></td>
+                <td>${escapeHtml(label(item.location_type))}</td>
+                <td>${escapeHtml(locationName(item))}</td>
+                <td class="number-cell">${formatNumber(item.current_quantity)}</td>
+                <td class="number-cell">${formatNumber(item.frozen_quantity)}</td>
+                <td class="number-cell">${formatNumber(availableQuantity(item))}</td>
+                <td class="number-cell">${formatNumber(item.safety_stock)}</td>
+                <td class="number-cell">${formatNumber(item.max_stock)}</td>
+                <td>${formatTime(item.last_updated_at)}</td>
+              </tr>`,
+          )
+          .join("")
+      : emptyRow(9, "没有符合筛选条件的库存记录");
+    renderInventoryPagination(total);
+  }
+
+  async function loadInventoryOverview(force = false) {
     await loadLookups();
-    const rows = listItems(await API.getWarnings());
+    if (force || !state.loadedInventoryTabs.has("overview")) {
+      state.inventoryOverviewRows = listItems(await API.getInventory());
+      state.loadedInventoryTabs.add("overview");
+    }
+    renderInventoryOverview();
+  }
+
+  function renderWarningList(rows) {
     const critical = rows.filter((item) => item.warning_type === "critical_stockout").length;
     const stockout = rows.filter((item) => item.warning_type === "stockout").length;
     const overstock = rows.filter((item) => item.warning_type === "overstock").length;
@@ -620,15 +866,37 @@
               <tr>
                 <td>${statusBadge(item.warning_type)}</td>
                 <td><strong>${escapeHtml(item.product_name || productName(item.product_id))}</strong><small class="cell-subtitle">ID ${escapeHtml(item.product_id)}</small></td>
-                <td>${escapeHtml(item.location_name || label(item.location_type))}<small class="cell-subtitle">${escapeHtml(label(item.location_type))}</small></td>
+                <td>${escapeHtml(locationName(item))}<small class="cell-subtitle">${escapeHtml(label(item.location_type))}</small></td>
                 <td class="number-cell">${formatNumber(item.current_quantity)}</td>
-                <td class="number-cell">${formatNumber(item.available_quantity ?? Number(item.current_quantity || 0) - Number(item.frozen_quantity || 0))}</td>
+                <td class="number-cell">${formatNumber(availableQuantity(item))}</td>
                 <td>${formatNumber(item.safety_stock)} / ${formatNumber(item.max_stock)}</td>
                 <td class="message-cell">${escapeHtml(item.warning_message || "库存达到预警阈值")}</td>
               </tr>`,
           )
           .join("")
       : emptyRow(7, "当前没有库存预警");
+  }
+
+  async function loadInventoryAlerts(force = false) {
+    await loadLookups();
+    if (force || !state.loadedInventoryTabs.has("alerts")) {
+      state.inventoryWarningRows = listItems(await API.getWarnings());
+      state.loadedInventoryTabs.add("alerts");
+    }
+    renderWarningList(state.inventoryWarningRows);
+  }
+
+  async function switchInventoryTab(tabName, force = false) {
+    setInventoryTab(tabName);
+    if (tabName === "alerts") {
+      await loadInventoryAlerts(force);
+      return;
+    }
+    await loadInventoryOverview(force);
+  }
+
+  async function loadWarnings() {
+    await switchInventoryTab(state.inventoryTab || "overview", true);
     state.loadedViews.add("warnings");
   }
 
@@ -680,16 +948,19 @@
       API.getReplenishmentRequests(),
       API.getOutboundOrders(),
     ]);
-    renderRequests(listItems(requests));
-    renderOutbounds(listItems(outbounds));
+    const outboundRows = listItems(outbounds);
+    const outboundMap = new Map(outboundRows.map((item) => [Number(item.id), item]));
+    renderRequests(listItems(requests), outboundMap);
+    renderOutbounds(outboundRows);
     state.loadedViews.add("fulfillment");
   }
 
-  function renderRequests(rows) {
+  function renderRequests(rows, outboundMap = new Map()) {
     setText("requestResultBadge", `${rows.length} 张申请`);
     $("requestTableBody").innerHTML = rows.length
       ? rows
           .map((item) => {
+            const relatedOutbound = outboundMap.get(Number(item.generated_outbound_order_id));
             let action = '<span class="done-text">无需操作</span>';
             if (item.audit_status === "pending") {
               action =
@@ -709,9 +980,19 @@
                   : permissionNote();
             } else if (item.audit_status === "approved" && !item.generated_outbound_order_id) {
               action = canDo("convert-request")
-                ? `<button class="btn btn-sm btn-primary row-action" type="button" data-action="convert-request" data-id="${item.id}"><span class="btn-label">转出库单</span></button>`
+                ? `<button class="btn btn-sm btn-primary row-action" type="button" data-action="convert-request" data-id="${item.id}"><span class="btn-label">自动分仓生成出库单</span></button>`
                 : permissionNote();
             }
+            const assignedWarehouse =
+              item.source_warehouse_name ||
+              relatedOutbound?.source_warehouse_name ||
+              (item.source_warehouse_id || relatedOutbound?.source_warehouse_id
+                ? warehouseName(item.source_warehouse_id || relatedOutbound?.source_warehouse_id)
+                : "待分配");
+            const outboundLabel =
+              item.outbound_no ||
+              relatedOutbound?.outbound_no ||
+              (item.generated_outbound_order_id ? `#${item.generated_outbound_order_id}` : "--");
             return `
               <tr>
                 <td><strong>${escapeHtml(item.request_no)}</strong><small class="cell-subtitle">ID ${escapeHtml(item.id)}</small></td>
@@ -720,12 +1001,13 @@
                 <td class="number-cell">${formatNumber(item.request_quantity)}</td>
                 <td class="message-cell">${escapeHtml(item.request_reason || "--")}</td>
                 <td>${statusBadge(item.audit_status)}</td>
-                <td>${item.generated_outbound_order_id ? `#${escapeHtml(item.generated_outbound_order_id)}` : "--"}</td>
+                <td>${escapeHtml(assignedWarehouse)}</td>
+                <td>${escapeHtml(outboundLabel)}</td>
                 <td>${action}</td>
               </tr>`;
           })
           .join("")
-      : emptyRow(8, "暂无补货申请，请先导入演示数据");
+      : emptyRow(9, "暂无补货申请，请先导入演示数据");
   }
 
   function renderOutbounds(rows) {
@@ -748,8 +1030,8 @@
             return `
               <tr>
                 <td><strong>${escapeHtml(item.outbound_no)}</strong><small class="cell-subtitle">ID ${escapeHtml(item.id)}</small></td>
-                <td>${escapeHtml(warehouseName(item.source_warehouse_id))}</td>
-                <td>${escapeHtml(storeName(item.target_store_id))}</td>
+                <td>${escapeHtml(item.source_warehouse_name || warehouseName(item.source_warehouse_id))}</td>
+                <td>${escapeHtml(item.target_store_name || storeName(item.target_store_id))}</td>
                 <td>${escapeHtml(itemSummary(item.items))}</td>
                 <td>${item.source_request_id ? `RR #${escapeHtml(item.source_request_id)}` : "--"}</td>
                 <td>${statusBadge(item.status)}</td>
@@ -1082,6 +1364,11 @@
       return false;
     }
 
+    if (viewName === "warnings") {
+      state.inventoryTab = options.inventoryTab || "overview";
+      setInventoryTab(state.inventoryTab);
+    }
+
     state.currentView = viewName;
     activateView(viewName);
     renderNavigation();
@@ -1093,7 +1380,7 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
 
     if (options.load === false) return true;
-    if (!options.force && state.loadedViews.has(viewName)) return true;
+    if (!options.force && viewName !== "warnings" && state.loadedViews.has(viewName)) return true;
 
     try {
       await viewLoaders[viewName]();
@@ -1156,7 +1443,8 @@
       },
       "convert-request": {
         request: () => API.convertReplenishment(id),
-        success: (result) => `已生成出库单 ${result.outbound_no || `#${result.outbound_order_id}`}`,
+        success: (result) =>
+          `已生成出库单 ${result.outbound_no || `#${result.outbound_order_id}`}，系统分配发货仓库：${result.source_warehouse_name || warehouseName(result.source_warehouse_id)}`,
         reload: loadFulfillment,
       },
       "ship-outbound": {
@@ -1366,12 +1654,32 @@
     errorElement.textContent = "";
   }
 
+  function resetInventoryFilters() {
+    state.inventoryOverviewPage = 1;
+    if ($("inventoryKeywordInput")) $("inventoryKeywordInput").value = "";
+    if ($("inventoryLocationTypeFilter")) $("inventoryLocationTypeFilter").value = "all";
+    if ($("inventoryLocationFilter")) {
+      $("inventoryLocationFilter").innerHTML = '<option value="all">全部仓库与门店</option>';
+      $("inventoryLocationFilter").value = "all";
+    }
+    if ($("inventoryLocationSummary")) {
+      $("inventoryLocationSummary").innerHTML = "";
+      $("inventoryLocationSummary").hidden = true;
+    }
+    if ($("inventoryOverviewPagination")) $("inventoryOverviewPagination").hidden = true;
+  }
+
   async function enterWorkspace(role, username = role) {
     state.currentRole = role;
     state.currentUser = buildDemoUser(role, username);
     state.currentView = defaultViewForRole();
+    state.inventoryTab = "overview";
     state.lookupsLoaded = false;
     state.loadedViews.clear();
+    state.loadedInventoryTabs.clear();
+    state.inventoryOverviewRows = [];
+    state.inventoryWarningRows = [];
+    resetInventoryFilters();
 
     updateRoleIdentity();
     renderNavigation();
@@ -1392,8 +1700,13 @@
     state.currentRole = null;
     state.currentUser = null;
     state.currentView = "dashboard";
+    state.inventoryTab = "overview";
     state.lookupsLoaded = false;
     state.loadedViews.clear();
+    state.loadedInventoryTabs.clear();
+    state.inventoryOverviewRows = [];
+    state.inventoryWarningRows = [];
+    resetInventoryFilters();
     clearAlert();
     updateHistory("");
     closeMobileMenu();
@@ -1472,8 +1785,42 @@
 
     document.querySelectorAll("[data-jump]").forEach((button) => {
       button.addEventListener("click", async () => {
-        await switchView(button.dataset.jump);
+        await switchView(button.dataset.jump, {
+          inventoryTab: button.dataset.jumpTab,
+        });
       });
+    });
+
+    document.querySelectorAll("[data-inventory-tab]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        try {
+          await switchInventoryTab(button.dataset.inventoryTab, true);
+        } catch (error) {
+          showAlert(error?.message || "加载库存数据失败");
+        }
+      });
+    });
+
+    $("inventoryKeywordInput")?.addEventListener("input", () => {
+      state.inventoryOverviewPage = 1;
+      renderInventoryOverview();
+    });
+
+    $("inventoryLocationTypeFilter")?.addEventListener("change", () => {
+      state.inventoryOverviewPage = 1;
+      renderInventoryOverview();
+    });
+
+    $("inventoryLocationFilter")?.addEventListener("change", () => {
+      renderInventoryLocationSummary(getInventoryOverviewBaseRows());
+    });
+
+    $("inventoryPrevPageBtn")?.addEventListener("click", () => {
+      setInventoryOverviewPage(state.inventoryOverviewPage - 1);
+    });
+
+    $("inventoryNextPageBtn")?.addEventListener("click", () => {
+      setInventoryOverviewPage(state.inventoryOverviewPage + 1);
     });
 
     document.querySelectorAll(".module-refresh").forEach((button) => {

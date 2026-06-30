@@ -191,7 +191,7 @@
                     <span class="section-tag">INVENTORY ALERTS</span>
                     <h3>当前库存异常警告</h3>
                   </div>
-                  <button class="text-action" type="button" data-jump="warnings">查看完整预警清单 →</button>
+                  <button class="text-action" type="button" data-jump="warnings" data-jump-tab="alerts">查看完整预警清单 →</button>
                 </div>
                 <p class="card-description">自动检测库存量与安全线偏离，优先展示需要处理的商品。</p>
                 <div class="compact-list" id="dashboardRiskList">
@@ -315,45 +315,116 @@
               <div>
                 <span class="section-tag">INVENTORY ALERT</span>
                 <h2>库存查询与预警</h2>
-                <p>识别严重缺货、库存不足与库存积压，辅助运营人员快速处置。</p>
+                <p>既可以查看所有仓库和门店库存，也可以聚焦严重缺货、库存不足与库存积压预警。</p>
               </div>
               <button class="btn btn-outline-primary app-btn module-refresh" type="button" data-loader="warnings">
-                <span class="btn-label">刷新预警</span>
+                <span class="btn-label">刷新当前标签</span>
               </button>
             </div>
 
-            <div class="warning-summary">
-              <article><span class="risk-icon critical"></span><div><strong id="warningCriticalCount">--</strong><small>严重缺货</small></div></article>
-              <article><span class="risk-icon stockout"></span><div><strong id="warningStockoutCount">--</strong><small>库存不足</small></div></article>
-              <article><span class="risk-icon overstock"></span><div><strong id="warningOverstockCount">--</strong><small>库存积压</small></div></article>
-              <article><span class="risk-icon normal"></span><div><strong id="warningTotalCount">--</strong><small>预警合计</small></div></article>
+            <div class="inventory-tab-bar" role="tablist" aria-label="库存模块视图切换">
+              <button class="inventory-tab active" type="button" data-inventory-tab="overview">库存总览</button>
+              <button class="inventory-tab" type="button" data-inventory-tab="alerts">库存预警</button>
             </div>
 
-            <article class="content-card">
-              <div class="card-heading">
-                <div>
-                  <span class="section-tag">WARNING LIST</span>
-                  <h3>预警明细</h3>
+            <div class="inventory-panel active" data-inventory-panel="overview">
+              <article class="content-card">
+                <div class="card-heading">
+                  <div>
+                    <span class="section-tag">INVENTORY OVERVIEW</span>
+                    <h3>库存总览</h3>
+                  </div>
+                  <span class="soft-badge" id="inventoryOverviewResultBadge">0 条记录</span>
                 </div>
-                <span class="soft-badge" id="warningResultBadge">0 条记录</span>
+
+                <div class="inventory-filter-bar">
+                  <label class="filter-field">
+                    <span>商品名称筛选</span>
+                    <input class="form-control" id="inventoryKeywordInput" type="text" placeholder="输入商品名称关键词" />
+                  </label>
+                  <label class="filter-field">
+                    <span>位置类型</span>
+                    <select class="form-select" id="inventoryLocationTypeFilter">
+                      <option value="all">全部</option>
+                      <option value="warehouse">仓库</option>
+                      <option value="store">门店</option>
+                    </select>
+                  </label>
+                  <label class="filter-field">
+                    <span>查看指定位置</span>
+                    <select class="form-select" id="inventoryLocationFilter">
+                      <option value="all">全部仓库与门店</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="inventory-location-summary" id="inventoryLocationSummary" hidden></div>
+
+                <div class="table-responsive">
+                  <table class="table app-table align-middle">
+                    <thead>
+                      <tr>
+                        <th>商品</th>
+                        <th>位置类型</th>
+                        <th>仓库 / 门店</th>
+                        <th>当前库存</th>
+                        <th>冻结库存</th>
+                        <th>可用库存</th>
+                        <th>安全库存</th>
+                        <th>最大库存</th>
+                        <th>更新时间</th>
+                      </tr>
+                    </thead>
+                    <tbody id="inventoryOverviewTableBody"></tbody>
+                  </table>
+                </div>
+
+                <div class="table-pagination" id="inventoryOverviewPagination" hidden>
+                  <button class="btn btn-outline-primary app-btn pagination-btn" id="inventoryPrevPageBtn" type="button">
+                    上一页
+                  </button>
+                  <span class="pagination-text" id="inventoryPageInfo">第 1 / 1 页</span>
+                  <button class="btn btn-outline-primary app-btn pagination-btn" id="inventoryNextPageBtn" type="button">
+                    下一页
+                  </button>
+                </div>
+              </article>
+            </div>
+
+            <div class="inventory-panel" data-inventory-panel="alerts" hidden>
+              <div class="warning-summary">
+                <article><span class="risk-icon critical"></span><div><strong id="warningCriticalCount">--</strong><small>严重缺货</small></div></article>
+                <article><span class="risk-icon stockout"></span><div><strong id="warningStockoutCount">--</strong><small>库存不足</small></div></article>
+                <article><span class="risk-icon overstock"></span><div><strong id="warningOverstockCount">--</strong><small>库存积压</small></div></article>
+                <article><span class="risk-icon normal"></span><div><strong id="warningTotalCount">--</strong><small>预警合计</small></div></article>
               </div>
-              <div class="table-responsive">
-                <table class="table app-table align-middle">
-                  <thead>
-                    <tr>
-                      <th>风险等级</th>
-                      <th>商品</th>
-                      <th>位置</th>
-                      <th>当前库存</th>
-                      <th>可用库存</th>
-                      <th>安全 / 最大库存</th>
-                      <th>预警说明</th>
-                    </tr>
-                  </thead>
-                  <tbody id="warningTableBody"></tbody>
-                </table>
-              </div>
-            </article>
+
+              <article class="content-card">
+                <div class="card-heading">
+                  <div>
+                    <span class="section-tag">WARNING LIST</span>
+                    <h3>预警明细</h3>
+                  </div>
+                  <span class="soft-badge" id="warningResultBadge">0 条记录</span>
+                </div>
+                <div class="table-responsive">
+                  <table class="table app-table align-middle">
+                    <thead>
+                      <tr>
+                        <th>风险等级</th>
+                        <th>商品</th>
+                        <th>位置</th>
+                        <th>当前库存</th>
+                        <th>可用库存</th>
+                        <th>安全 / 最大库存</th>
+                        <th>预警说明</th>
+                      </tr>
+                    </thead>
+                    <tbody id="warningTableBody"></tbody>
+                  </table>
+                </div>
+              </article>
+            </div>
           </section>
 
           <section class="app-view" id="view-inbound" data-title="采购入库">
@@ -431,7 +502,7 @@
             <div class="flow-strip compact-flow" aria-label="门店补货出库业务流程">
               <div class="flow-step active"><span>1</span><div><strong>申请</strong><small>门店发起</small></div></div><i>→</i>
               <div class="flow-step"><span>2</span><div><strong>审核</strong><small>状态变为已通过</small></div></div><i>→</i>
-              <div class="flow-step"><span>3</span><div><strong>转出库单</strong><small>关联业务单据</small></div></div><i>→</i>
+              <div class="flow-step"><span>3</span><div><strong>自动分仓</strong><small>生成来源仓库明确的出库单</small></div></div><i>→</i>
               <div class="flow-step"><span>4</span><div><strong>发货</strong><small>校验并扣减库存</small></div></div><i>→</i>
               <div class="flow-step"><span>5</span><div><strong>签收</strong><small>履约完成</small></div></div>
             </div>
@@ -451,6 +522,7 @@
                       <th>申请数量</th>
                       <th>申请原因</th>
                       <th>审核状态</th>
+                      <th>来源仓库 / 分配仓库</th>
                       <th>关联出库单</th>
                       <th>操作</th>
                     </tr>

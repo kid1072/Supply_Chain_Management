@@ -122,3 +122,13 @@ s
 /api/health
 /api/health/db
 /api/example/status
+/api/products
+/api/suppliers
+/api/warehouses
+/api/stores
+/api/analytics/dashboard
+/api/analytics/inventory-ranking
+/api/inventory/warnings
+/api/health
+/api/health/db
+/api/example/status

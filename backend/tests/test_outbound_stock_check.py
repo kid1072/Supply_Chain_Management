@@ -5,7 +5,7 @@ from app.core.exceptions import BusinessException
 from app.models.inventory import Inventory
 from app.models.outbound import OutboundOrder
 from app.services.inventory_service import get_or_create_inventory
-from app.services.outbound_service import ship_outbound_order
+from app.services.outbound_service import ship_outbound_order, sign_outbound_order
 
 
 def test_outbound_stock_check():
@@ -25,7 +25,7 @@ def test_outbound_stock_check():
         session.close()
 
 
-def test_outbound_success_moves_stock():
+def test_outbound_success_only_increases_store_stock_after_sign():
     session = SessionLocal()
     try:
         order = session.query(OutboundOrder).filter_by(status="pending").first()
@@ -46,11 +46,18 @@ def test_outbound_success_moves_stock():
         store_inventory = session.query(Inventory).filter_by(product_id=first_item.product_id, store_id=order.target_store_id).first()
         before_store = store_inventory.current_quantity if store_inventory else 0
         before_warehouse = warehouse_inventory.current_quantity
+
         ship_outbound_order(session, order.id)
-        session.commit()
         session.refresh(warehouse_inventory)
-        store_inventory = session.query(Inventory).filter_by(product_id=first_item.product_id, store_id=order.target_store_id).one()
+
+        store_inventory = session.query(Inventory).filter_by(product_id=first_item.product_id, store_id=order.target_store_id).first()
         assert warehouse_inventory.current_quantity == before_warehouse - first_item.quantity
+        assert (store_inventory.current_quantity if store_inventory else 0) == before_store
+
+        sign_outbound_order(session, order.id)
+        session.commit()
+
+        store_inventory = session.query(Inventory).filter_by(product_id=first_item.product_id, store_id=order.target_store_id).one()
         assert store_inventory.current_quantity >= before_store + first_item.quantity
     finally:
         session.close()

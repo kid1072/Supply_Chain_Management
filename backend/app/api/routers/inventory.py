@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_db_dep
 from app.core.cache import cache
@@ -22,11 +22,21 @@ from app.utils.pagination import normalize_pagination
 router = APIRouter(prefix="/api/inventory", tags=["inventory"])
 
 
+def serialize_inventory(item: Inventory) -> dict:
+    data = InventoryRead.model_validate(item).model_dump()
+    data["product_name"] = item.product.name if item.product else None
+    data["warehouse_name"] = item.warehouse.name if item.warehouse else None
+    data["store_name"] = item.store.name if item.store else None
+    data["location_name"] = data["warehouse_name"] if item.location_type == "warehouse" else data["store_name"]
+    data["available_quantity"] = int(item.current_quantity or 0) - int(item.frozen_quantity or 0)
+    return data
+
+
 @router.get("")
 def inventory_list(page: int = 1, page_size: int = 20, keyword: str | None = None, db: Session = Depends(get_db_dep)):
     page, page_size = normalize_pagination(page, page_size)
     items, total = list_inventory(db, page, page_size, keyword)
-    return page_response([InventoryRead.model_validate(item).model_dump() for item in items], total, page, page_size)
+    return page_response([serialize_inventory(item) for item in items], total, page, page_size)
 
 
 @router.get("/product/{product_id}/distribution")
@@ -36,14 +46,26 @@ def product_distribution(product_id: int, db: Session = Depends(get_db_dep)):
 
 @router.get("/store/{store_id}")
 def store_inventory(store_id: int, db: Session = Depends(get_db_dep)):
-    items = list(db.scalars(select(Inventory).where(Inventory.store_id == store_id)))
-    return success_response([InventoryRead.model_validate(item).model_dump() for item in items])
+    items = list(
+        db.scalars(
+            select(Inventory)
+            .options(joinedload(Inventory.product), joinedload(Inventory.warehouse), joinedload(Inventory.store))
+            .where(Inventory.store_id == store_id)
+        )
+    )
+    return success_response([serialize_inventory(item) for item in items])
 
 
 @router.get("/warehouse/{warehouse_id}")
 def warehouse_inventory(warehouse_id: int, db: Session = Depends(get_db_dep)):
-    items = list(db.scalars(select(Inventory).where(Inventory.warehouse_id == warehouse_id)))
-    return success_response([InventoryRead.model_validate(item).model_dump() for item in items])
+    items = list(
+        db.scalars(
+            select(Inventory)
+            .options(joinedload(Inventory.product), joinedload(Inventory.warehouse), joinedload(Inventory.store))
+            .where(Inventory.warehouse_id == warehouse_id)
+        )
+    )
+    return success_response([serialize_inventory(item) for item in items])
 
 
 @router.get("/warnings")

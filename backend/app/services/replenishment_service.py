@@ -9,7 +9,11 @@ from app.models.store import Store
 from app.models.user import User
 from app.schemas.outbound import OutboundOrderCreate
 from app.schemas.replenishment import ReplenishmentRequestCreate
-from app.services.inventory_service import generate_doc_no
+from app.services.inventory_service import (
+    ensure_source_warehouse_has_stock,
+    generate_doc_no,
+    pick_best_source_warehouse,
+)
 from app.services.outbound_service import create_outbound_order
 from app.utils.datetime_utils import now_local
 
@@ -64,16 +68,34 @@ def reject_request(db: Session, request_id: int, audited_by: int) -> Replenishme
     return request
 
 
-def convert_to_outbound(db: Session, request_id: int, source_warehouse_id: int, handled_by: int) -> OutboundOrder:
+def convert_to_outbound(
+    db: Session,
+    request_id: int,
+    source_warehouse_id: int | None = None,
+    handled_by: int = 1,
+) -> OutboundOrder:
     request = db.get(ReplenishmentRequest, request_id)
     if not request:
         raise BusinessException("request not found", 404)
     if request.audit_status != "approved":
         raise BusinessException("only approved request can be converted")
+    if source_warehouse_id is None:
+        selected_inventory = pick_best_source_warehouse(
+            db,
+            product_id=request.product_id,
+            request_quantity=request.request_quantity,
+        )
+    else:
+        selected_inventory = ensure_source_warehouse_has_stock(
+            db,
+            product_id=request.product_id,
+            request_quantity=request.request_quantity,
+            source_warehouse_id=source_warehouse_id,
+        )
     outbound = create_outbound_order(
         db,
         OutboundOrderCreate(
-            source_warehouse_id=source_warehouse_id,
+            source_warehouse_id=selected_inventory.warehouse_id,
             target_store_id=request.store_id,
             handled_by=handled_by,
             source_request_id=request.id,
@@ -83,5 +105,7 @@ def convert_to_outbound(db: Session, request_id: int, source_warehouse_id: int, 
     )
     request.audit_status = "converted"
     request.generated_outbound_order_id = outbound.id
+    # 当前项目保持“生成出库单不扣库存，实际发货时扣库存”的设计，
+    # 这样仍能在 ship 阶段进行二次校验，避免并发或重复操作导致库存错误。
     db.flush()
     return outbound

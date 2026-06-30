@@ -59,28 +59,6 @@ def ship_outbound_order(db: Session, outbound_order_id: int) -> OutboundOrder:
             target_location_type="store",
             target_store_id=order.target_store_id,
         )
-        source_inventory = get_or_create_inventory(
-            db,
-            product_id=item.product_id,
-            location_type="warehouse",
-            warehouse_id=order.source_warehouse_id,
-        )
-        increase_stock(
-            db,
-            product_id=item.product_id,
-            location_type="store",
-            store_id=order.target_store_id,
-            quantity=item.quantity,
-            operator_id=order.handled_by,
-            transaction_type="transfer",
-            related_doc_type="outbound_order",
-            related_doc_id=order.id,
-            remark=order.remark,
-            safety_stock=source_inventory.safety_stock,
-            max_stock=max(source_inventory.max_stock, source_inventory.safety_stock * 4),
-            source_location_type="warehouse",
-            source_warehouse_id=order.source_warehouse_id,
-        )
     order.status = "shipped"
     if order.source_request_id:
         request = db.get(ReplenishmentRequest, order.source_request_id)
@@ -98,7 +76,31 @@ def sign_outbound_order(db: Session, outbound_order_id: int) -> OutboundOrder:
         raise BusinessException("outbound order not found", 404)
     if order.status != "shipped":
         raise BusinessException("only shipped outbound order can be signed")
+    for item in order.items:
+        source_inventory = get_or_create_inventory(
+            db,
+            product_id=item.product_id,
+            location_type="warehouse",
+            warehouse_id=order.source_warehouse_id,
+        )
+        increase_stock(
+            db,
+            product_id=item.product_id,
+            location_type="store",
+            store_id=order.target_store_id,
+            quantity=item.quantity,
+            operator_id=order.handled_by,
+            transaction_type="store_inbound",
+            related_doc_type="outbound_order",
+            related_doc_id=order.id,
+            remark=order.remark,
+            safety_stock=source_inventory.safety_stock,
+            max_stock=max(source_inventory.max_stock, source_inventory.safety_stock * 4),
+            source_location_type="warehouse",
+            source_warehouse_id=order.source_warehouse_id,
+        )
     order.status = "signed"
+    invalidate_business_cache()
     db.flush()
     return order
 

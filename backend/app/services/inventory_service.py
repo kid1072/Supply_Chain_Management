@@ -26,6 +26,10 @@ def generate_transaction_no(db: Session) -> str:
     return generate_doc_no("TX", total + 1)
 
 
+def get_available_quantity(inventory: Inventory) -> int:
+    return int(inventory.current_quantity or 0) - int(inventory.frozen_quantity or 0)
+
+
 def get_or_create_inventory(
     db: Session,
     *,
@@ -268,12 +272,79 @@ def adjust_stock(
 
 
 def list_inventory(db: Session, page: int, page_size: int, keyword: str | None = None) -> tuple[list[Inventory], int]:
-    query: Select[tuple[Inventory]] = select(Inventory).options(joinedload(Inventory.product))
+    query: Select[tuple[Inventory]] = select(Inventory).options(
+        joinedload(Inventory.product),
+        joinedload(Inventory.warehouse),
+        joinedload(Inventory.store),
+    ).order_by(
+        Inventory.location_type.asc(),
+        Inventory.warehouse_id.asc(),
+        Inventory.store_id.asc(),
+        Inventory.product_id.asc(),
+        Inventory.id.asc(),
+    )
     if keyword:
         query = query.join(Product).where(Product.name.contains(keyword))
-    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    total = db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
     items = list(db.scalars(query.offset((page - 1) * page_size).limit(page_size)))
     return items, total
+
+
+def pick_best_source_warehouse(
+    db: Session,
+    *,
+    product_id: int,
+    request_quantity: int,
+) -> Inventory:
+    inventories = list(
+        db.scalars(
+            select(Inventory)
+            .options(joinedload(Inventory.warehouse))
+            .where(
+                Inventory.product_id == product_id,
+                Inventory.location_type == "warehouse",
+                Inventory.warehouse_id.is_not(None),
+            )
+        )
+    )
+    candidates = [
+        inventory
+        for inventory in inventories
+        if get_available_quantity(inventory) >= request_quantity
+    ]
+    if not candidates:
+        raise BusinessException("所有仓库库存不足，无法生成出库单")
+    candidates.sort(
+        key=lambda inventory: (
+            -(get_available_quantity(inventory) - request_quantity),
+            inventory.warehouse_id or 0,
+        )
+    )
+    return candidates[0]
+
+
+def ensure_source_warehouse_has_stock(
+    db: Session,
+    *,
+    product_id: int,
+    request_quantity: int,
+    source_warehouse_id: int,
+) -> Inventory:
+    warehouse = db.get(Warehouse, source_warehouse_id)
+    if not warehouse:
+        raise BusinessException("warehouse not found", 404)
+    inventory = db.scalar(
+        select(Inventory)
+        .options(joinedload(Inventory.warehouse))
+        .where(
+            Inventory.product_id == product_id,
+            Inventory.location_type == "warehouse",
+            Inventory.warehouse_id == source_warehouse_id,
+        )
+    )
+    if not inventory or get_available_quantity(inventory) < request_quantity:
+        raise BusinessException("指定仓库库存不足，无法生成出库单")
+    return inventory
 
 
 def get_inventory_warnings(db: Session) -> list[dict[str, Any]]:
@@ -302,7 +373,7 @@ def get_inventory_warnings(db: Session) -> list[dict[str, Any]]:
                     "location_name": location_name,
                     "current_quantity": inventory.current_quantity,
                     "frozen_quantity": inventory.frozen_quantity,
-                    "available_quantity": inventory.current_quantity - inventory.frozen_quantity,
+                    "available_quantity": get_available_quantity(inventory),
                     "safety_stock": inventory.safety_stock,
                     "max_stock": inventory.max_stock,
                     "warning_type": warning_type,
@@ -338,7 +409,7 @@ def get_product_distribution(db: Session, product_id: int) -> list[dict[str, Any
                 "location_name": warehouse_name if inventory.location_type == "warehouse" else store_name,
                 "current_quantity": inventory.current_quantity,
                 "frozen_quantity": inventory.frozen_quantity,
-                "available_quantity": inventory.current_quantity - inventory.frozen_quantity,
+                "available_quantity": get_available_quantity(inventory),
                 "safety_stock": inventory.safety_stock,
                 "max_stock": inventory.max_stock,
             }
