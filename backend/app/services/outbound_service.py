@@ -9,7 +9,7 @@ from app.models.store import Store
 from app.models.user import User
 from app.models.warehouse import Warehouse
 from app.schemas.outbound import OutboundOrderCreate
-from app.services.inventory_service import decrease_stock, generate_doc_no, get_or_create_inventory, increase_stock
+from app.services.inventory_service import decrease_stock, generate_doc_no, get_or_create_inventory, increase_stock, release_reserved_stock
 
 
 def create_outbound_order(db: Session, payload: OutboundOrderCreate) -> OutboundOrder:
@@ -45,6 +45,19 @@ def ship_outbound_order(db: Session, outbound_order_id: int) -> OutboundOrder:
     if order.status != "pending":
         raise BusinessException("only pending outbound order can be shipped")
     for item in order.items:
+        source_inventory = get_or_create_inventory(
+            db,
+            product_id=item.product_id,
+            location_type="warehouse",
+            warehouse_id=order.source_warehouse_id,
+        )
+        if int(source_inventory.frozen_quantity or 0) >= item.quantity:
+            release_reserved_stock(
+                db,
+                product_id=item.product_id,
+                warehouse_id=order.source_warehouse_id,
+                quantity=item.quantity,
+            )
         decrease_stock(
             db,
             product_id=item.product_id,
@@ -111,6 +124,21 @@ def cancel_outbound_order(db: Session, outbound_order_id: int) -> OutboundOrder:
         raise BusinessException("outbound order not found", 404)
     if order.status == "shipped":
         raise BusinessException("shipped outbound order cannot be cancelled")
+    if order.status == "pending":
+        for item in order.items:
+            source_inventory = get_or_create_inventory(
+                db,
+                product_id=item.product_id,
+                location_type="warehouse",
+                warehouse_id=order.source_warehouse_id,
+            )
+            if int(source_inventory.frozen_quantity or 0) >= item.quantity:
+                release_reserved_stock(
+                    db,
+                    product_id=item.product_id,
+                    warehouse_id=order.source_warehouse_id,
+                    quantity=item.quantity,
+                )
     order.status = "cancelled"
     db.flush()
     return order

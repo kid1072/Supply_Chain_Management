@@ -256,7 +256,7 @@
               <div>
                 <span class="section-tag">MASTER DATA</span>
                 <h2>基础数据录入</h2>
-                <p>新增商品、供应商和履约节点后，可继续绑定商品与供应商关系，新数据会立即进入后续业务选择项。</p>
+                <p>新增商品时同步选择供货供应商与供货参数，避免只建商品、不建供货关系，后续采购与补货可直接使用。</p>
               </div>
               <button class="btn btn-outline-primary app-btn module-refresh" type="button" data-loader="data">
                 <span class="btn-label">刷新数据概况</span>
@@ -271,19 +271,31 @@
             </div>
 
             <div class="data-form-grid">
-              <form class="content-card data-form" id="productForm" data-create-form="product">
+              <form class="content-card data-form data-form-wide" id="productForm" data-create-form="product">
                 <div class="card-heading">
                   <div><span class="section-tag">PRODUCT</span><h3>新增商品</h3></div>
                   <span class="form-sequence">01</span>
                 </div>
+                <p class="form-helper-text">创建商品时需同步指定首个供货供应商、采购价与到货周期，保存后即可直接用于采购入库。</p>
                 <div class="form-grid">
                   <label><span>商品编码 *</span><input class="form-control" name="product_code" placeholder="例如 SKU-031" required /></label>
                   <label><span>商品名称 *</span><input class="form-control" name="name" placeholder="例如 原味酸奶" required /></label>
                   <label><span>规格</span><input class="form-control" name="spec" placeholder="例如 200g × 12" /></label>
                   <label><span>计量单位</span><input class="form-control" name="unit" value="piece" required /></label>
-                  <label class="form-span-2"><span>默认安全库存</span><input class="form-control" name="default_safety_stock" type="number" min="0" value="10" required /></label>
+                  <label><span>默认安全库存</span><input class="form-control" name="default_safety_stock" type="number" min="0" value="10" required /></label>
+                  <label>
+                    <span>绑定供应商 *</span>
+                    <input class="form-control" id="productSupplierSearch" list="productSupplierOptions" placeholder="搜索供应商名称" autocomplete="off" required />
+                    <input type="hidden" id="productSupplier" name="supplier_id" />
+                    <datalist id="productSupplierOptions"></datalist>
+                  </label>
+                  <label><span>采购价 *</span><input class="form-control" name="supply_price" type="number" min="0" step="0.01" value="10" required /></label>
+                  <label><span>到货周期（天） *</span><input class="form-control" name="lead_time_days" type="number" min="0" value="3" required /></label>
+                  <label><span>准时率 *</span><input class="form-control" name="on_time_rate" type="number" min="0" max="1" step="0.01" value="0.95" required /></label>
+                  <label><span>质量评分 *</span><input class="form-control" name="quality_score" type="number" min="0" max="10" step="0.1" value="8.5" required /></label>
+                  <label class="form-span-2"><span>优先供应商</span><select class="form-select" name="is_preferred"><option value="true">是</option><option value="false" selected>否</option></select></label>
                 </div>
-                <button class="btn btn-primary app-btn form-submit" type="submit" data-action-permission="create-base-data"><span class="btn-label">保存商品</span></button>
+                <button class="btn btn-primary app-btn form-submit" type="submit" data-action-permission="create-base-data"><span class="btn-label">保存商品并绑定供应商</span></button>
               </form>
 
               <form class="content-card data-form" id="supplierForm" data-create-form="supplier">
@@ -339,7 +351,7 @@
                   </div>
                   <span class="form-sequence">05</span>
                 </div>
-                <p class="form-helper-text">新增商品后，在这里指定哪些供应商可以供货，采购入库时才会出现对应匹配关系。</p>
+                <p class="form-helper-text">如果同一商品还需要补充第二家、第三家供应商，可在这里继续追加供货关系。</p>
                 <div class="form-grid">
                   <label>
                     <span>商品 *</span>

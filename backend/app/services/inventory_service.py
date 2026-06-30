@@ -30,6 +30,52 @@ def get_available_quantity(inventory: Inventory) -> int:
     return int(inventory.current_quantity or 0) - int(inventory.frozen_quantity or 0)
 
 
+def reserve_stock(
+    db: Session,
+    *,
+    product_id: int,
+    warehouse_id: int,
+    quantity: int,
+) -> Inventory:
+    if quantity <= 0:
+        raise BusinessException("quantity must be greater than 0")
+    inventory = get_or_create_inventory(
+        db,
+        product_id=product_id,
+        location_type="warehouse",
+        warehouse_id=warehouse_id,
+    )
+    if get_available_quantity(inventory) < quantity:
+        raise BusinessException("warehouse available stock is insufficient for reservation")
+    inventory.frozen_quantity += quantity
+    inventory.last_updated_at = now_local()
+    db.flush()
+    return inventory
+
+
+def release_reserved_stock(
+    db: Session,
+    *,
+    product_id: int,
+    warehouse_id: int,
+    quantity: int,
+) -> Inventory:
+    if quantity <= 0:
+        raise BusinessException("quantity must be greater than 0")
+    inventory = get_or_create_inventory(
+        db,
+        product_id=product_id,
+        location_type="warehouse",
+        warehouse_id=warehouse_id,
+    )
+    if int(inventory.frozen_quantity or 0) < quantity:
+        raise BusinessException("reserved stock is insufficient to release")
+    inventory.frozen_quantity -= quantity
+    inventory.last_updated_at = now_local()
+    db.flush()
+    return inventory
+
+
 def get_or_create_inventory(
     db: Session,
     *,
@@ -345,6 +391,64 @@ def ensure_source_warehouse_has_stock(
     if not inventory or get_available_quantity(inventory) < request_quantity:
         raise BusinessException("指定仓库库存不足，无法生成出库单")
     return inventory
+
+
+def allocate_source_warehouses(
+    db: Session,
+    *,
+    product_id: int,
+    request_quantity: int,
+) -> list[tuple[Inventory, int]]:
+    if request_quantity <= 0:
+        raise BusinessException("request_quantity must be greater than 0")
+    inventories = list(
+        db.scalars(
+            select(Inventory)
+            .options(joinedload(Inventory.warehouse))
+            .where(
+                Inventory.product_id == product_id,
+                Inventory.location_type == "warehouse",
+                Inventory.warehouse_id.is_not(None),
+            )
+        )
+    )
+    candidates = [inventory for inventory in inventories if get_available_quantity(inventory) > 0]
+    if not candidates:
+        raise BusinessException("all warehouses are insufficient to fulfill the request")
+
+    single_candidates = [
+        inventory for inventory in candidates if get_available_quantity(inventory) >= request_quantity
+    ]
+    if single_candidates:
+        single_candidates.sort(
+            key=lambda inventory: (
+                -get_available_quantity(inventory),
+                inventory.warehouse_id or 0,
+            )
+        )
+        return [(single_candidates[0], request_quantity)]
+
+    candidates.sort(
+        key=lambda inventory: (
+            -get_available_quantity(inventory),
+            inventory.warehouse_id or 0,
+        )
+    )
+    remaining = request_quantity
+    allocations: list[tuple[Inventory, int]] = []
+    for inventory in candidates:
+        if remaining <= 0:
+            break
+        available = get_available_quantity(inventory)
+        if available <= 0:
+            continue
+        allocated_quantity = min(available, remaining)
+        allocations.append((inventory, allocated_quantity))
+        remaining -= allocated_quantity
+
+    if remaining > 0:
+        raise BusinessException("all warehouses are insufficient to fulfill the request")
+    return allocations
 
 
 def get_inventory_warnings(db: Session) -> list[dict[str, Any]]:

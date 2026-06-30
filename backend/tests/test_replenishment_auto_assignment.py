@@ -123,10 +123,11 @@ def test_convert_to_outbound_auto_selects_warehouse_with_max_remaining_stock():
             frozen_quantity=10,
         )
 
-        outbound = convert_to_outbound(session, request.id, None, user.id)
+        outbounds = convert_to_outbound(session, request.id, None, user.id)
 
-        assert outbound.source_warehouse_id == warehouse_b.id
-        assert outbound.source_warehouse_id is not None
+        assert len(outbounds) == 1
+        assert outbounds[0].source_warehouse_id == warehouse_b.id
+        assert outbounds[0].source_warehouse_id is not None
     finally:
         session.rollback()
         session.close()
@@ -227,6 +228,7 @@ def test_convert_to_outbound_api_returns_selected_source_warehouse_and_outbound_
     assert payload["outbound_order_id"] is not None
     assert payload["source_warehouse_id"] == expected_warehouse_id
     assert payload["source_warehouse_name"] == expected_warehouse_name
+    assert payload["outbound_order_count"] == 1
 
     list_response = api_client.get("/api/outbound-orders?page=1&page_size=500")
     assert list_response.status_code == 200
@@ -282,3 +284,82 @@ def test_inventory_list_returns_warehouse_and_store_records_without_breaking_war
     warning_response = api_client.get("/api/inventory/warnings")
     assert warning_response.status_code == 200
     assert warning_response.json()["success"] is True
+
+
+def test_convert_to_outbound_reserves_stock_immediately_and_next_request_uses_other_warehouse():
+    session = SessionLocal()
+    try:
+        first_request, product, _store, user = _create_approved_request(session, quantity=10)
+        second_request = create_replenishment_request(
+            session,
+            ReplenishmentRequestCreate(
+                store_id=first_request.store_id,
+                product_id=product.id,
+                request_quantity=10,
+                request_reason="第二张申请单",
+                created_by=user.id,
+            ),
+        )
+        approve_request(session, second_request.id, user.id)
+        warehouse_a, warehouse_b = _ensure_warehouses(session)
+        inventory_a = _set_inventory(
+            session,
+            product_id=product.id,
+            location_type="warehouse",
+            warehouse_id=warehouse_a.id,
+            current_quantity=10,
+            frozen_quantity=0,
+        )
+        inventory_b = _set_inventory(
+            session,
+            product_id=product.id,
+            location_type="warehouse",
+            warehouse_id=warehouse_b.id,
+            current_quantity=10,
+            frozen_quantity=0,
+        )
+
+        first_outbounds = convert_to_outbound(session, first_request.id, None, user.id)
+        second_outbounds = convert_to_outbound(session, second_request.id, None, user.id)
+
+        assert len(first_outbounds) == 1
+        assert len(second_outbounds) == 1
+        assert first_outbounds[0].source_warehouse_id != second_outbounds[0].source_warehouse_id
+        assert inventory_a.frozen_quantity + inventory_b.frozen_quantity == 20
+    finally:
+        session.rollback()
+        session.close()
+
+
+def test_convert_to_outbound_splits_request_across_multiple_warehouses():
+    session = SessionLocal()
+    try:
+        request, product, _store, user = _create_approved_request(session, quantity=13)
+        warehouse_a, warehouse_b = _ensure_warehouses(session)
+        inventory_a = _set_inventory(
+            session,
+            product_id=product.id,
+            location_type="warehouse",
+            warehouse_id=warehouse_a.id,
+            current_quantity=10,
+            frozen_quantity=0,
+        )
+        inventory_b = _set_inventory(
+            session,
+            product_id=product.id,
+            location_type="warehouse",
+            warehouse_id=warehouse_b.id,
+            current_quantity=3,
+            frozen_quantity=0,
+        )
+
+        outbounds = convert_to_outbound(session, request.id, None, user.id)
+
+        assert len(outbounds) == 2
+        shipped_quantities = sorted(item.items[0].quantity for item in outbounds)
+        assert shipped_quantities == [3, 10]
+        assert inventory_a.frozen_quantity == 10
+        assert inventory_b.frozen_quantity == 3
+    finally:
+        session.rollback()
+        session.close()

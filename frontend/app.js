@@ -135,6 +135,7 @@
     supplierIdsByProduct: new Map(),
     warehouses: new Map(),
     stores: new Map(),
+    pendingProductSupplierId: null,
     pendingSupplierBindingProductId: null,
     pendingSupplierBindingSupplierId: null,
     charts: new Map(),
@@ -560,6 +561,7 @@
       .trim()
       .toLowerCase();
     const locationType = $("inventoryLocationTypeFilter")?.value || "all";
+    const selectedLocationKey = $("inventoryLocationFilter")?.value || "all";
     return sortInventoryRows(
       state.inventoryOverviewRows.filter((item) => {
         const matchesKeyword =
@@ -568,7 +570,9 @@
             .toLowerCase()
             .includes(keyword);
         const matchesType = locationType === "all" || item.location_type === locationType;
-        return matchesKeyword && matchesType;
+        const matchesLocation =
+          selectedLocationKey === "all" || inventoryLocationKey(item) === selectedLocationKey;
+        return matchesKeyword && matchesType && matchesLocation;
       }),
     );
   }
@@ -828,8 +832,35 @@
     }
   }
 
+  function populateProductSupplierPicker() {
+    const suppliers = [...state.suppliers.values()];
+    populateSearchPicker({
+      inputId: "productSupplierSearch",
+      hiddenId: "productSupplier",
+      datalistId: "productSupplierOptions",
+      items: suppliers,
+      formatter: supplierSearchLabel,
+      aliases: [(item) => item.name, (item) => String(item.id)],
+      placeholder: "搜索供应商名称",
+      keepTypedValue: true,
+    });
+
+    applySearchPickerSelection(
+      "productSupplierSearch",
+      "productSupplier",
+      suppliers,
+      supplierSearchLabel,
+      state.pendingProductSupplierId,
+    );
+
+    if ($("productSupplier")?.value) {
+      state.pendingProductSupplierId = null;
+    }
+  }
+
   function populateBusinessSelects() {
     const products = [...state.products.values()];
+    populateProductSupplierPicker();
     populateSearchPicker({
       inputId: "inboundProductSearch",
       hiddenId: "inboundProduct",
@@ -1901,6 +1932,10 @@
     const values = formValues(form);
     let boundProductId = null;
     let boundSupplierId = null;
+    if (type === "product") {
+      boundSupplierId = requireSearchPickerValue("productSupplier", "请先选择该商品的供货供应商");
+      if (!boundSupplierId) return;
+    }
     if (type === "supplier-product") {
       boundProductId = requireSearchPickerValue("bindProduct", "请先选择要绑定的商品");
       boundSupplierId = requireSearchPickerValue("bindSupplier", "请先选择供应商");
@@ -1908,16 +1943,39 @@
     }
     const configurations = {
       product: {
-        request: () =>
-          API.createProduct({
+        request: async () => {
+          const product = await API.createProduct({
             product_code: values.product_code.trim(),
             name: values.name.trim(),
             spec: optionalValue(values.spec),
             unit: values.unit.trim(),
             default_safety_stock: Number(values.default_safety_stock),
             is_active: true,
-          }),
-        success: "商品已新增，可在入库单中选择",
+          });
+
+          try {
+            await API.bindSupplierProduct(boundSupplierId, {
+              product_id: Number(product.id),
+              supply_price: Number(values.supply_price),
+              lead_time_days: Number(values.lead_time_days),
+              on_time_rate: Number(values.on_time_rate),
+              quality_score: Number(values.quality_score),
+              is_preferred: values.is_preferred === "true",
+            });
+          } catch (error) {
+            state.pendingSupplierBindingProductId = Number(product.id) || null;
+            state.pendingSupplierBindingSupplierId = Number(boundSupplierId) || null;
+            throw new Error(
+              `${error?.message || "供应商绑定失败"}。商品已创建，请在“绑定商品与供应商”区域补充供货关系。`,
+            );
+          }
+
+          return {
+            ...product,
+            supplier_id: Number(boundSupplierId),
+          };
+        },
+        success: "商品已新增，并已同步绑定供货供应商",
       },
       supplier: {
         request: () =>
@@ -1982,9 +2040,12 @@
     if (!result) return;
 
     if (type === "product" && result.id) {
+      state.pendingProductSupplierId = null;
       state.pendingSupplierBindingProductId = Number(result.id);
+      state.pendingSupplierBindingSupplierId = Number(result.supplier_id || 0) || null;
     }
     if (type === "supplier" && result.id) {
+      state.pendingProductSupplierId = Number(result.id);
       state.pendingSupplierBindingSupplierId = Number(result.id);
     }
     if (type === "supplier-product") {
@@ -2122,6 +2183,7 @@
     state.transactionsRows = [];
     state.supplierProductsBySupplier.clear();
     state.supplierIdsByProduct.clear();
+    state.pendingProductSupplierId = null;
     state.pendingSupplierBindingProductId = null;
     state.pendingSupplierBindingSupplierId = null;
     resetInventoryFilters();
@@ -2155,6 +2217,7 @@
     state.transactionsRows = [];
     state.supplierProductsBySupplier.clear();
     state.supplierIdsByProduct.clear();
+    state.pendingProductSupplierId = null;
     state.pendingSupplierBindingProductId = null;
     state.pendingSupplierBindingSupplierId = null;
     resetInventoryFilters();
@@ -2264,7 +2327,8 @@
     });
 
     $("inventoryLocationFilter")?.addEventListener("change", () => {
-      renderInventoryLocationSummary(getInventoryOverviewBaseRows());
+      state.inventoryOverviewPage = 1;
+      renderInventoryOverview();
     });
 
     $("inventoryPrevPageBtn")?.addEventListener("click", () => {
@@ -2342,6 +2406,19 @@
       }
     });
 
+    $("productSupplierSearch")?.addEventListener("input", () => {
+      const matched = syncSearchPickerSelection(
+        "productSupplierSearch",
+        "productSupplier",
+        [...state.suppliers.values()],
+        supplierSearchLabel,
+        [(item) => item.name, (item) => String(item.id)],
+      );
+      if (matched) {
+        $("productSupplierSearch").value = supplierSearchLabel(matched);
+      }
+    });
+
     ["transactionKeywordInput", "transactionWarehouseFilter", "transactionTypeFilter", "transactionSortFilter"].forEach(
       (id) => {
         $(id)?.addEventListener(id === "transactionKeywordInput" ? "input" : "change", () => {
@@ -2395,6 +2472,10 @@
         event.preventDefault();
         await handleBaseDataCreate(event.currentTarget);
       });
+    });
+
+    $("productForm")?.addEventListener("reset", () => {
+      window.setTimeout(() => populateBusinessSelects(), 0);
     });
 
     $("createInboundForm").addEventListener("submit", async (event) => {
