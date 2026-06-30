@@ -125,6 +125,20 @@ CREATE TABLE users (
 	FOREIGN KEY(store_id) REFERENCES stores (id)
 );
 
+CREATE TABLE walmart_store_profiles (
+	id INTEGER NOT NULL, 
+	store_id INTEGER NOT NULL, 
+	walmart_store_no VARCHAR(50) NOT NULL, 
+	store_type VARCHAR(50), 
+	store_size NUMERIC(12, 2), 
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL, 
+	updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL, 
+	PRIMARY KEY (id), 
+	UNIQUE (store_id), 
+	FOREIGN KEY(store_id) REFERENCES stores (id), 
+	UNIQUE (walmart_store_no)
+);
+
 CREATE TABLE ai_recommendations (
 	id INTEGER NOT NULL, 
 	store_id INTEGER NOT NULL, 
@@ -313,6 +327,42 @@ CREATE TABLE supplier_products (
 	CONSTRAINT ck_supplier_product_lead_time_nonnegative CHECK (lead_time_days >= 0), 
 	CONSTRAINT ck_supplier_product_quality CHECK (quality_score >= 0 AND quality_score <= 10), 
 	FOREIGN KEY(supplier_id) REFERENCES suppliers (id), 
+	FOREIGN KEY(product_id) REFERENCES products (id)
+);
+
+CREATE TABLE walmart_weekly_sales_facts (
+	id INTEGER NOT NULL, 
+	store_id INTEGER NOT NULL, 
+	product_id INTEGER NOT NULL, 
+	sales_date DATE NOT NULL, 
+	weekly_sales NUMERIC(14, 2) NOT NULL, 
+	is_holiday BOOLEAN NOT NULL, 
+	temperature NUMERIC(10, 2), 
+	fuel_price NUMERIC(10, 4), 
+	markdown1 NUMERIC(14, 2), 
+	markdown2 NUMERIC(14, 2), 
+	markdown3 NUMERIC(14, 2), 
+	markdown4 NUMERIC(14, 2), 
+	markdown5 NUMERIC(14, 2), 
+	cpi NUMERIC(12, 4), 
+	unemployment NUMERIC(10, 4), 
+	raw_store_code VARCHAR(50) NOT NULL, 
+	raw_department_code VARCHAR(80) NOT NULL, 
+	raw_category_code VARCHAR(80), 
+	raw_week_key VARCHAR(20), 
+	weekly_units NUMERIC(14, 2), 
+	avg_sell_price NUMERIC(14, 4), 
+	event_name_1 VARCHAR(100), 
+	event_type_1 VARCHAR(50), 
+	event_name_2 VARCHAR(100), 
+	event_type_2 VARCHAR(50), 
+	snap_flag BOOLEAN, 
+	source_row_key VARCHAR(255) NOT NULL, 
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_walmart_weekly_store_product_date UNIQUE (store_id, product_id, sales_date), 
+	CONSTRAINT uq_walmart_weekly_source_row_key UNIQUE (source_row_key), 
+	FOREIGN KEY(store_id) REFERENCES stores (id), 
 	FOREIGN KEY(product_id) REFERENCES products (id)
 );
 

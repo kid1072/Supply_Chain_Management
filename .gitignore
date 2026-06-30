@@ -6,3 +6,6 @@
 backend/schema/supply_chain.db
 .env
 backend/.env
+backend/data/raw/
+data/raw/
+*.zip

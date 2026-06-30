@@ -1903,19 +1903,12 @@
     bindEvents();
     const savedRole = window.localStorage.getItem("currentRole");
     const savedName = window.localStorage.getItem("currentLoginName") || "demo";
-    if (!savedRole || !ROLE_LABELS[savedRole]) {
-      $("loginScreen").hidden = false;
-      $("appShell").hidden = true;
-      return;
-    }
+    $("loginScreen").hidden = false;
+    $("appShell").hidden = true;
 
-    try {
-      await enterWorkspace(savedRole, savedName);
-    } catch (_error) {
-      window.localStorage.removeItem("currentRole");
-      window.localStorage.removeItem("currentLoginName");
-      $("loginScreen").hidden = false;
-      $("appShell").hidden = true;
+    if (savedRole && ROLE_LABELS[savedRole]) {
+      if ($("loginRole")) $("loginRole").value = savedRole;
+      if ($("loginUsername")) $("loginUsername").value = savedName;
     }
   }
 

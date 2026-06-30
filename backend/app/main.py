@@ -9,6 +9,7 @@ from app.api.routers import (
     analytics,
     categories,
     distributed,
+    external_data,
     example_data,
     health,
     inbound_orders,
@@ -51,6 +52,7 @@ async def global_exception_handler(_request: Request, exc: Exception):
 
 for router in [
     health.router,
+    external_data.router,
     users.router,
     categories.router,
     products.router,

@@ -277,11 +277,11 @@ def list_inventory(db: Session, page: int, page_size: int, keyword: str | None =
         joinedload(Inventory.warehouse),
         joinedload(Inventory.store),
     ).order_by(
+        Inventory.id.desc(),
         Inventory.location_type.asc(),
         Inventory.warehouse_id.asc(),
         Inventory.store_id.asc(),
         Inventory.product_id.asc(),
-        Inventory.id.asc(),
     )
     if keyword:
         query = query.join(Product).where(Product.name.contains(keyword))
