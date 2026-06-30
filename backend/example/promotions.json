@@ -21,8 +21,8 @@
   },
   {
     "promotion_name": "中秋节促销",
-    "start_date": "2026-06-28",
-    "end_date": "2026-07-08",
+    "start_date": "2026-06-30",
+    "end_date": "2026-07-10",
     "store_code": "STORE-C",
     "product_code": null,
     "category_name": "零食",
@@ -31,8 +31,8 @@
   },
   {
     "promotion_name": "双十一促销",
-    "start_date": "2026-06-28",
-    "end_date": "2026-07-03",
+    "start_date": "2026-06-30",
+    "end_date": "2026-07-05",
     "store_code": "STORE-D",
     "product_code": null,
     "category_name": "日用品",
@@ -41,8 +41,8 @@
   },
   {
     "promotion_name": "冬季日用品促销",
-    "start_date": "2026-06-28",
-    "end_date": "2026-07-28",
+    "start_date": "2026-06-30",
+    "end_date": "2026-07-30",
     "store_code": "STORE-E",
     "product_code": "P0017",
     "category_name": "日用品",

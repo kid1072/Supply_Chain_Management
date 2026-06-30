@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
 
 
 @router.post("/generate")
-def generate(store_id: int | None = None, enhance_with_llm: bool = False, db: Session = Depends(get_db_dep)):
+def generate(store_id: int | None = None, enhance_with_llm: bool = True, db: Session = Depends(get_db_dep)):
     items = generate_recommendations(db, store_id, enhance_with_llm=enhance_with_llm)
     db.commit()
     return success_response({"count": len(items)})

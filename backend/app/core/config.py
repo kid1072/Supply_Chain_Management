@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,10 +16,10 @@ class Settings(BaseSettings):
     database_connect_timeout_seconds: int = 3
     example_data_dir: str = "./example"
 
-    llm_provider: str = "rule"
+    llm_provider: str = "deepseek"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen2.5:7b"
-    deepseek_api_key: str = ""
+    deepseek_api_key: SecretStr | None = Field(default=None, validation_alias="DEEPSEEK_API_KEY", repr=False)
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-chat"
     llm_timeout_seconds: int = 30
@@ -57,6 +58,10 @@ class Settings(BaseSettings):
     @property
     def schema_dir_path(self) -> Path:
         return (BASE_DIR / "schema").resolve()
+
+    @property
+    def deepseek_api_key_value(self) -> str:
+        return self.deepseek_api_key.get_secret_value() if self.deepseek_api_key else ""
 
 
 @lru_cache

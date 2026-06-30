@@ -38,10 +38,32 @@ def test_recommendations_deepseek_invalid_key_falls_back(monkeypatch):
 
     session = SessionLocal()
     try:
-        items = generate_recommendations(session, enhance_with_llm=True)
+        items = generate_recommendations(session)
         session.commit()
         assert len(items) > 0
-        high_risk = session.query(AIRecommendation).filter_by(risk_level="high").limit(5).all()
+        high_risk = session.query(AIRecommendation).filter_by(risk_level="high").all()
+        assert high_risk
         assert all(item.llm_provider == "rule" and item.llm_used is False for item in high_risk)
+    finally:
+        session.close()
+
+
+def test_recommendations_high_risk_use_llm_by_default(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "masked")
+    get_settings.cache_clear()
+
+    monkeypatch.setattr(DeepSeekClient, "generate_text", lambda self, prompt: f"enhanced::{prompt[:20]}")
+
+    session = SessionLocal()
+    try:
+        items = generate_recommendations(session)
+        session.commit()
+        assert len(items) > 0
+        high_risk = session.query(AIRecommendation).filter_by(risk_level="high").all()
+        assert high_risk
+        assert all(item.llm_used is True and item.reason_enhanced for item in high_risk)
+        non_high_risk = session.query(AIRecommendation).filter(AIRecommendation.risk_level != "high").all()
+        assert all(item.llm_used is False and item.reason_enhanced is None for item in non_high_risk)
     finally:
         session.close()

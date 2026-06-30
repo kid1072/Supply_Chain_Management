@@ -68,7 +68,7 @@ def maybe_enhance_reason(rule_reason: str) -> tuple[str | None, str, bool]:
 def generate_recommendations(
     db: Session,
     store_id: int | None = None,
-    enhance_with_llm: bool = False,
+    enhance_with_llm: bool = True,
 ) -> list[AIRecommendation]:
     if store_id:
         db.query(AIRecommendation).filter(AIRecommendation.store_id == store_id).delete()
@@ -157,7 +157,7 @@ def generate_recommendations(
             db.add(recommendation)
             recommendations.append(recommendation)
     if enhance_with_llm:
-        high_risk_recommendations = [item for item in recommendations if item.risk_level == "high"][:5]
+        high_risk_recommendations = [item for item in recommendations if item.risk_level == "high"]
         for recommendation in high_risk_recommendations:
             reason_enhanced, llm_provider, llm_used = maybe_enhance_reason(recommendation.reason)
             recommendation.reason_enhanced = reason_enhanced

@@ -1,5 +1,5 @@
-INSERT INTO users (username, password_hash, real_name, role, is_active) VALUES ('admin', '$pbkdf2-sha256$29000$shbCuNe6N.Zci/E.Z4yxlg$sCKInhhl6TngBUNzDGBvG6XZtG9dyktowlA5zoChSd4', '系统管理员', 'admin', 1);
-INSERT INTO users (username, password_hash, real_name, role, is_active) VALUES ('buyer', '$pbkdf2-sha256$29000$sVYKASCEMKYUIiQk5HxPiQ$ZnfE9fW6nuDIDb0v1aGvgjm3qgmEbvbrE39DBv9PxvU', '采购专员', 'buyer', 1);
-INSERT INTO users (username, password_hash, real_name, role, is_active) VALUES ('warehouse', '$pbkdf2-sha256$29000$jrGW0tr739u7N8aYs5Zyzg$Jz.c8u2AxmlQAXMIlAcyy502H3BFWwSt.FxcNsmxZY0', '仓库主管', 'warehouse_manager', 1);
-INSERT INTO users (username, password_hash, real_name, role, is_active) VALUES ('store', '$pbkdf2-sha256$29000$QGgNYYwxRuidE6JUao2Rcg$ULfP1VRBmhpfq1sdxVFhGFKewCL8q0mFTkGw5l/jBmc', '门店员工', 'store_staff', 1);
-INSERT INTO users (username, password_hash, real_name, role, is_active) VALUES ('manager', '$pbkdf2-sha256$29000$FmLsPYdQirHWOgdASGkNQQ$DD/M5rywzepoPKcb5QwL5A32.FaqkM/aThV2iobC7ng', '运营经理', 'manager', 1);
+INSERT INTO users (username, password_hash, real_name, role, is_active) VALUES ('admin', '$pbkdf2-sha256$29000$V8oZg1CKEQJASMm515pzTg$X15SE.8lM9S2zHWhto24vD90BGe1fmPttQtN2Kc4EJU', '系统管理员', 'admin', 1);
+INSERT INTO users (username, password_hash, real_name, role, is_active) VALUES ('buyer', '$pbkdf2-sha256$29000$ac25F8I4B0Bo7d373ztnLA$Kwb6Buj5BNBU9xi0QqohQpHfyugLJ1DcJZS4xMB2DDE', '采购专员', 'buyer', 1);
+INSERT INTO users (username, password_hash, real_name, role, is_active) VALUES ('warehouse', '$pbkdf2-sha256$29000$55zzHoPwnjOG0JqzFqJUCg$WnFVqZ7qnQy430NVmBtuHRHJRDFMTko/C1Y5hg74hMU', '仓库主管', 'warehouse_manager', 1);
+INSERT INTO users (username, password_hash, real_name, role, is_active) VALUES ('store', '$pbkdf2-sha256$29000$DIEQAqBUKsVYS2ktpVTKmQ$md4ptMQ.gHqKh/0ai0ip5ufrd5biCtYFByleQZ6ksOY', '门店员工', 'store_staff', 1);
+INSERT INTO users (username, password_hash, real_name, role, is_active) VALUES ('manager', '$pbkdf2-sha256$29000$HOO8l7IWYkzpXct57z1nrA$ZRAxyGH12t4PC2kUEsHP2.KC3SnWv5Cki60cAekEgAk', '运营经理', 'manager', 1);

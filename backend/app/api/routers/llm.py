@@ -18,7 +18,7 @@ def llm_status():
                 "model": settings.deepseek_model,
                 "available": client is not None,
                 "base_url": settings.deepseek_base_url,
-                "key_configured": bool(settings.deepseek_api_key),
+                "key_configured": bool(settings.deepseek_api_key_value),
             }
         )
     if settings.llm_provider == "ollama":

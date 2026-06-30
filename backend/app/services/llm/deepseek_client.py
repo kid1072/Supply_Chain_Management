@@ -14,7 +14,7 @@ class DeepSeekClient(BaseLLMClient):
         response = requests.post(
             f"{self.settings.deepseek_base_url}/chat/completions",
             headers={
-                "Authorization": f"Bearer {self.settings.deepseek_api_key}",
+                "Authorization": f"Bearer {self.settings.deepseek_api_key_value}",
                 "Content-Type": "application/json",
             },
             json={

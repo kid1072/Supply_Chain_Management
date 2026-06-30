@@ -7,6 +7,6 @@ def get_llm_client():
     settings = get_settings()
     if settings.llm_provider == "ollama":
         return OllamaClient()
-    if settings.llm_provider == "deepseek" and settings.deepseek_api_key:
+    if settings.llm_provider == "deepseek" and settings.deepseek_api_key_value:
         return DeepSeekClient()
     return None
