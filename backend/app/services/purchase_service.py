@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import BusinessException
 from app.models.product import Product
 from app.models.purchase import PurchaseOrder, PurchaseOrderItem
-from app.models.supplier import Supplier
+from app.models.supplier import Supplier, SupplierProduct
 from app.models.user import User
 from app.schemas.purchase import PurchaseOrderCreate
 from app.services.inventory_service import generate_doc_no
@@ -37,6 +37,14 @@ def create_purchase_order(db: Session, payload: PurchaseOrderCreate) -> Purchase
             raise BusinessException("purchase_price must be greater than or equal to 0")
         if not db.get(Product, item.product_id):
             raise BusinessException(f"product {item.product_id} not found", 404)
+        relation = db.scalar(
+            select(SupplierProduct.id).where(
+                SupplierProduct.supplier_id == payload.supplier_id,
+                SupplierProduct.product_id == item.product_id,
+            )
+        )
+        if not relation:
+            raise BusinessException("所选供应商不供应当前商品")
         subtotal = item.purchase_price * item.purchase_quantity
         total_amount += subtotal
         order.items.append(

@@ -4,9 +4,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_dep
 from app.core.exceptions import BusinessException
+from app.models.product import Product
 from app.core.response import page_response, success_response
 from app.models.supplier import Supplier, SupplierProduct
-from app.schemas.supplier import SupplierCreate, SupplierProductRead, SupplierRead, SupplierUpdate
+from app.schemas.supplier import SupplierCreate, SupplierProductRead, SupplierProductUpsert, SupplierRead, SupplierUpdate
 from app.services.supplier_score_service import get_supplier_ranking, get_supplier_score, recalculate_scores
 from app.utils.pagination import normalize_pagination
 
@@ -82,6 +83,39 @@ def delete_supplier(supplier_id: int, db: Session = Depends(get_db_dep)):
 def get_supplier_products(supplier_id: int, db: Session = Depends(get_db_dep)):
     items = list(db.scalars(select(SupplierProduct).where(SupplierProduct.supplier_id == supplier_id)))
     return success_response([SupplierProductRead.model_validate(item).model_dump() for item in items])
+
+
+@router.post("/{supplier_id}/products")
+def upsert_supplier_product(supplier_id: int, payload: SupplierProductUpsert, db: Session = Depends(get_db_dep)):
+    supplier = db.get(Supplier, supplier_id)
+    if not supplier:
+        raise BusinessException("supplier not found", 404)
+    product = db.get(Product, payload.product_id)
+    if not product:
+        raise BusinessException("product not found", 404)
+
+    relation = db.scalar(
+        select(SupplierProduct).where(
+            SupplierProduct.supplier_id == supplier_id,
+            SupplierProduct.product_id == payload.product_id,
+        )
+    )
+
+    if relation:
+        relation.supply_price = payload.supply_price
+        relation.lead_time_days = payload.lead_time_days
+        relation.on_time_rate = payload.on_time_rate
+        relation.quality_score = payload.quality_score
+        relation.is_preferred = payload.is_preferred
+        db.commit()
+        db.refresh(relation)
+        return success_response(SupplierProductRead.model_validate(relation).model_dump(), message="updated")
+
+    relation = SupplierProduct(supplier_id=supplier_id, **payload.model_dump())
+    db.add(relation)
+    db.commit()
+    db.refresh(relation)
+    return success_response(SupplierProductRead.model_validate(relation).model_dump(), message="created")
 
 
 @router.get("/{supplier_id}/score")

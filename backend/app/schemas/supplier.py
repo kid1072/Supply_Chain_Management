@@ -46,3 +46,12 @@ class SupplierProductRead(ORMBase):
     on_time_rate: float
     quality_score: float
     is_preferred: bool
+
+
+class SupplierProductUpsert(BaseModel):
+    product_id: int
+    supply_price: Decimal
+    lead_time_days: int = 3
+    on_time_rate: float = 0.9
+    quality_score: float = 8.0
+    is_preferred: bool = False

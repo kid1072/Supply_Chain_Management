@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_dep
@@ -14,10 +14,10 @@ router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 @router.get("")
 def list_transactions(page: int = 1, page_size: int = 20, keyword: str | None = None, db: Session = Depends(get_db_dep)):
     page, page_size = normalize_pagination(page, page_size)
-    query = select(StockTransaction)
+    query = select(StockTransaction).order_by(desc(StockTransaction.transaction_time), desc(StockTransaction.id))
     if keyword:
         query = query.where(StockTransaction.transaction_no.contains(keyword))
-    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    total = db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
     items = [item.__dict__ | {"_sa_instance_state": None} for item in db.scalars(query.offset((page - 1) * page_size).limit(page_size))]
     cleaned = [{k: v for k, v in item.items() if k != "_sa_instance_state"} for item in items]
     return page_response(cleaned, total, page, page_size)

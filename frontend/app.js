@@ -121,21 +121,28 @@
     currentView: "dashboard",
     inventoryTab: "overview",
     inventoryOverviewPage: 1,
+    transactionPage: 1,
     eventsBound: false,
     lookupsLoaded: false,
     loadedViews: new Set(),
     loadedInventoryTabs: new Set(),
     inventoryOverviewRows: [],
     inventoryWarningRows: [],
+    transactionsRows: [],
     products: new Map(),
     suppliers: new Map(),
+    supplierProductsBySupplier: new Map(),
+    supplierIdsByProduct: new Map(),
     warehouses: new Map(),
     stores: new Map(),
+    pendingSupplierBindingProductId: null,
+    pendingSupplierBindingSupplierId: null,
     charts: new Map(),
   };
 
   const $ = (id) => document.getElementById(id);
   const INVENTORY_OVERVIEW_PAGE_SIZE = 20;
+  const TRANSACTION_PAGE_SIZE = 20;
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -609,6 +616,29 @@
       map.clear();
       listItems(result.value).forEach((item) => map.set(Number(item.id), item));
     });
+
+    state.supplierProductsBySupplier.clear();
+    state.supplierIdsByProduct.clear();
+    const supplierRows = [...state.suppliers.values()];
+    const supplierProductResults = await Promise.allSettled(
+      supplierRows.map((item) => API.getSupplierProducts(item.id)),
+    );
+    supplierProductResults.forEach((result, index) => {
+      const supplierId = Number(supplierRows[index]?.id || 0);
+      const relations = result.status === "fulfilled" ? listItems(result.value) : [];
+      state.supplierProductsBySupplier.set(supplierId, relations);
+      relations.forEach((relation) => {
+        const productId = Number(relation.product_id);
+        if (!state.supplierIdsByProduct.has(productId)) {
+          state.supplierIdsByProduct.set(productId, []);
+        }
+        const supplierIds = state.supplierIdsByProduct.get(productId);
+        if (!supplierIds.includes(supplierId)) {
+          supplierIds.push(supplierId);
+        }
+      });
+    });
+
     state.lookupsLoaded = true;
     populateBusinessSelects();
   }
@@ -630,13 +660,200 @@
     }
   }
 
+  function normalizeSearchText(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function productSearchLabel(item) {
+    return item?.product_code ? `${item.name} · ${item.product_code}` : item?.name || "--";
+  }
+
+  function supplierSearchLabel(item) {
+    return item?.name || "--";
+  }
+
+  function findSearchItem(items, keyword, formatter, aliases = []) {
+    const normalized = normalizeSearchText(keyword);
+    if (!normalized) return null;
+    return (
+      items.find((item) => {
+        const candidates = [formatter(item), ...aliases.map((resolver) => resolver(item))];
+        return candidates.some((candidate) => normalizeSearchText(candidate) === normalized);
+      }) || null
+    );
+  }
+
+  function populateSearchPicker({
+    inputId,
+    hiddenId,
+    datalistId,
+    items,
+    formatter,
+    aliases = [],
+    placeholder,
+    disabled = false,
+    keepTypedValue = false,
+  }) {
+    const input = $(inputId);
+    const hidden = $(hiddenId);
+    const datalist = $(datalistId);
+    if (!input || !hidden || !datalist) return;
+
+    const currentHiddenValue = String(hidden.value || "");
+    const selectedItem = items.find((item) => String(item.id) === currentHiddenValue) || null;
+
+    datalist.innerHTML = items
+      .map((item) => `<option value="${escapeHtml(formatter(item))}"></option>`)
+      .join("");
+    input.disabled = disabled;
+    input.placeholder = placeholder;
+
+    if (selectedItem) {
+      input.value = formatter(selectedItem);
+      hidden.value = String(selectedItem.id);
+      return;
+    }
+
+    const matched = keepTypedValue ? findSearchItem(items, input.value, formatter, aliases) : null;
+    if (matched) {
+      input.value = formatter(matched);
+      hidden.value = String(matched.id);
+      return;
+    }
+
+    hidden.value = "";
+    if (!keepTypedValue || disabled) {
+      input.value = "";
+    }
+  }
+
+  function syncSearchPickerSelection(inputId, hiddenId, items, formatter, aliases = []) {
+    const input = $(inputId);
+    const hidden = $(hiddenId);
+    if (!input || !hidden) return null;
+    const matched = findSearchItem(items, input.value, formatter, aliases);
+    hidden.value = matched ? String(matched.id) : "";
+    return matched;
+  }
+
+  function applySearchPickerSelection(inputId, hiddenId, items, formatter, selectedId) {
+    const input = $(inputId);
+    const hidden = $(hiddenId);
+    if (!input || !hidden || !selectedId || hidden.value) return;
+    const selectedItem = items.find((item) => Number(item.id) === Number(selectedId));
+    if (!selectedItem) return;
+    hidden.value = String(selectedItem.id);
+    input.value = formatter(selectedItem);
+  }
+
+  function inboundProducts() {
+    return [...state.products.values()];
+  }
+
+  function inboundSuppliersForProduct(productId) {
+    if (!state.supplierIdsByProduct.size) {
+      return [...state.suppliers.values()];
+    }
+    const supplierIds = state.supplierIdsByProduct.get(Number(productId)) || [];
+    return supplierIds
+      .map((supplierId) => state.suppliers.get(Number(supplierId)))
+      .filter(Boolean);
+  }
+
+  function refreshInboundSupplierPicker() {
+    const productId = Number($("inboundProduct")?.value || 0);
+    const suppliers = productId ? inboundSuppliersForProduct(productId) : [];
+    populateSearchPicker({
+      inputId: "inboundSupplierSearch",
+      hiddenId: "inboundSupplier",
+      datalistId: "inboundSupplierOptions",
+      items: suppliers,
+      formatter: supplierSearchLabel,
+      aliases: [(item) => item.name, (item) => String(item.id)],
+      placeholder: productId
+        ? suppliers.length
+          ? "搜索供应商名称"
+          : "当前商品暂无匹配供应商"
+        : "请先选择商品",
+      disabled: !productId || !suppliers.length,
+      keepTypedValue: false,
+    });
+  }
+
+  function populateSupplierBindingPickers() {
+    const products = [...state.products.values()];
+    const suppliers = [...state.suppliers.values()];
+
+    populateSearchPicker({
+      inputId: "bindProductSearch",
+      hiddenId: "bindProduct",
+      datalistId: "bindProductOptions",
+      items: products,
+      formatter: productSearchLabel,
+      aliases: [(item) => item.name, (item) => item.product_code, (item) => String(item.id)],
+      placeholder: "搜索商品名称或编码",
+      keepTypedValue: true,
+    });
+    populateSearchPicker({
+      inputId: "bindSupplierSearch",
+      hiddenId: "bindSupplier",
+      datalistId: "bindSupplierOptions",
+      items: suppliers,
+      formatter: supplierSearchLabel,
+      aliases: [(item) => item.name, (item) => String(item.id)],
+      placeholder: "搜索供应商名称",
+      keepTypedValue: true,
+    });
+
+    applySearchPickerSelection(
+      "bindProductSearch",
+      "bindProduct",
+      products,
+      productSearchLabel,
+      state.pendingSupplierBindingProductId,
+    );
+    applySearchPickerSelection(
+      "bindSupplierSearch",
+      "bindSupplier",
+      suppliers,
+      supplierSearchLabel,
+      state.pendingSupplierBindingSupplierId,
+    );
+
+    if ($("bindProduct")?.value) {
+      state.pendingSupplierBindingProductId = null;
+    }
+    if ($("bindSupplier")?.value) {
+      state.pendingSupplierBindingSupplierId = null;
+    }
+  }
+
   function populateBusinessSelects() {
     const products = [...state.products.values()];
-    populateSelect("inboundSupplier", [...state.suppliers.values()], "暂无供应商");
+    populateSearchPicker({
+      inputId: "inboundProductSearch",
+      hiddenId: "inboundProduct",
+      datalistId: "inboundProductOptions",
+      items: inboundProducts(),
+      formatter: productSearchLabel,
+      aliases: [(item) => item.name, (item) => item.product_code, (item) => String(item.id)],
+      placeholder: "搜索商品名称或编码",
+      keepTypedValue: true,
+    });
+    refreshInboundSupplierPicker();
     populateSelect("inboundWarehouse", [...state.warehouses.values()], "暂无仓库");
-    populateSelect("inboundProduct", products, "暂无商品");
     populateSelect("requestStore", [...state.stores.values()], "暂无门店");
-    populateSelect("requestProduct", products, "暂无商品");
+    populateSearchPicker({
+      inputId: "requestProductSearch",
+      hiddenId: "requestProduct",
+      datalistId: "requestProductOptions",
+      items: products,
+      formatter: productSearchLabel,
+      aliases: [(item) => item.name, (item) => item.product_code, (item) => String(item.id)],
+      placeholder: "搜索商品名称或编码",
+      keepTypedValue: true,
+    });
+    populateSupplierBindingPickers();
   }
 
   async function loadBaseData() {
@@ -1043,29 +1260,195 @@
       : emptyRow(8, "暂无出库单，审核补货申请后可生成");
   }
 
-  async function loadTransactions() {
-    await loadLookups();
-    const rows = listItems(await API.getTransactions());
-    setText("transactionResultBadge", `${rows.length} 条流水`);
-    $("transactionTableBody").innerHTML = rows.length
-      ? [...rows]
-          .sort((a, b) => new Date(b.transaction_time) - new Date(a.transaction_time))
+  function transactionLocationLabel(locationType, warehouseId, storeId) {
+    if (locationType === "warehouse" && warehouseId) return warehouseName(warehouseId);
+    if (locationType === "store" && storeId) return storeName(storeId);
+    return null;
+  }
+
+  function transactionPathText(item) {
+    const source = transactionLocationLabel(
+      item.source_location_type,
+      item.source_warehouse_id,
+      item.source_store_id,
+    );
+    const target = transactionLocationLabel(
+      item.target_location_type,
+      item.target_warehouse_id,
+      item.target_store_id,
+    );
+    if (item.transaction_type === "store_outbound" && source && target) {
+      return `${source} → 在途（发往 ${target}）`;
+    }
+    if (item.transaction_type === "store_inbound" && source && target) {
+      return `在途（来自 ${source}） → ${target}`;
+    }
+    if (source && target) return `${source} → ${target}`;
+    if (source) return `${source} → 外部`;
+    if (target) return `外部 → ${target}`;
+    return "系统内部调整";
+  }
+
+  function transactionStageNote(item) {
+    if (item.transaction_type === "store_outbound") {
+      return "发货时先扣减仓库库存";
+    }
+    if (item.transaction_type === "store_inbound") {
+      return "门店签收后再增加门店库存";
+    }
+    if (item.transaction_type === "purchase_inbound") {
+      return "采购到货后增加仓库库存";
+    }
+    return item.remark || "";
+  }
+
+  function populateTransactionFilters(rows) {
+    const warehouseSelect = $("transactionWarehouseFilter");
+    const typeSelect = $("transactionTypeFilter");
+    if (!warehouseSelect || !typeSelect) return;
+
+    const currentWarehouse = warehouseSelect.value || "all";
+    const currentType = typeSelect.value || "all";
+    const warehouseIds = new Set();
+    const typeSet = new Set();
+
+    rows.forEach((item) => {
+      if (item.source_warehouse_id) warehouseIds.add(Number(item.source_warehouse_id));
+      if (item.target_warehouse_id) warehouseIds.add(Number(item.target_warehouse_id));
+      if (item.transaction_type) typeSet.add(String(item.transaction_type));
+    });
+
+    const warehouseOptions = [`<option value="all">全部仓库</option>`];
+    [...warehouseIds]
+      .sort((a, b) => warehouseName(a).localeCompare(warehouseName(b), "zh-CN"))
+      .forEach((warehouseId) => {
+        warehouseOptions.push(
+          `<option value="${warehouseId}">${escapeHtml(warehouseName(warehouseId))}</option>`,
+        );
+      });
+    warehouseSelect.innerHTML = warehouseOptions.join("");
+    warehouseSelect.value = [...warehouseIds].includes(Number(currentWarehouse))
+      ? currentWarehouse
+      : "all";
+
+    const typeOptions = [`<option value="all">全部类型</option>`];
+    [...typeSet]
+      .sort((a, b) => label(a).localeCompare(label(b), "zh-CN"))
+      .forEach((type) => {
+        typeOptions.push(`<option value="${escapeHtml(type)}">${escapeHtml(label(type))}</option>`);
+      });
+    typeSelect.innerHTML = typeOptions.join("");
+    typeSelect.value = typeSet.has(currentType) ? currentType : "all";
+  }
+
+  function getFilteredTransactionRows() {
+    const keyword = normalizeSearchText($("transactionKeywordInput")?.value || "");
+    const warehouseFilter = $("transactionWarehouseFilter")?.value || "all";
+    const typeFilter = $("transactionTypeFilter")?.value || "all";
+    const sortOrder = $("transactionSortFilter")?.value || "desc";
+
+    return [...state.transactionsRows]
+      .filter((item) => {
+        const matchesKeyword =
+          !keyword ||
+          [
+            item.transaction_no,
+            productName(item.product_id),
+            item.related_doc_type ? label(item.related_doc_type) : "",
+            item.related_doc_id != null ? String(item.related_doc_id) : "",
+            transactionPathText(item),
+            transactionStageNote(item),
+            item.remark,
+          ].some((value) => normalizeSearchText(value).includes(keyword));
+
+        const matchesWarehouse =
+          warehouseFilter === "all" ||
+          Number(item.source_warehouse_id || 0) === Number(warehouseFilter) ||
+          Number(item.target_warehouse_id || 0) === Number(warehouseFilter);
+
+        const matchesType = typeFilter === "all" || String(item.transaction_type) === typeFilter;
+        return matchesKeyword && matchesWarehouse && matchesType;
+      })
+      .sort((left, right) => {
+        const diff = new Date(left.transaction_time).getTime() - new Date(right.transaction_time).getTime();
+        return sortOrder === "asc" ? diff : -diff;
+      });
+  }
+
+  function renderTransactionPagination(total) {
+    const container = $("transactionPagination");
+    const prevButton = $("transactionPrevPageBtn");
+    const nextButton = $("transactionNextPageBtn");
+    if (!container || !prevButton || !nextButton) return;
+
+    const totalPages = Math.max(1, Math.ceil(total / TRANSACTION_PAGE_SIZE));
+    const currentPage = Math.min(state.transactionPage, totalPages);
+    state.transactionPage = currentPage;
+
+    if (total <= TRANSACTION_PAGE_SIZE) {
+      container.hidden = true;
+      setText("transactionPageInfo", "第 1 / 1 页");
+      prevButton.disabled = true;
+      nextButton.disabled = true;
+      return;
+    }
+
+    container.hidden = false;
+    setText("transactionPageInfo", `第 ${currentPage} / ${totalPages} 页 · 共 ${total} 条`);
+    prevButton.disabled = currentPage <= 1;
+    nextButton.disabled = currentPage >= totalPages;
+  }
+
+  function renderTransactions() {
+    const rows = getFilteredTransactionRows();
+    const total = rows.length;
+    const totalPages = Math.max(1, Math.ceil(total / TRANSACTION_PAGE_SIZE));
+    if (state.transactionPage > totalPages) {
+      state.transactionPage = totalPages;
+    }
+    const startIndex = (state.transactionPage - 1) * TRANSACTION_PAGE_SIZE;
+    const pagedRows = rows.slice(startIndex, startIndex + TRANSACTION_PAGE_SIZE);
+    setText("transactionResultBadge", `共 ${total} 条流水`);
+
+    $("transactionTableBody").innerHTML = pagedRows.length
+      ? pagedRows
           .map((item) => {
             const quantity = Number(item.change_quantity || 0);
+            const relatedDoc =
+              item.related_doc_id != null
+                ? `${label(item.related_doc_type)} #${item.related_doc_id}`
+                : label(item.related_doc_type || "--");
             return `
               <tr>
                 <td><strong>${escapeHtml(item.transaction_no)}</strong></td>
                 <td>${escapeHtml(productName(item.product_id))}<small class="cell-subtitle">ID ${escapeHtml(item.product_id)}</small></td>
                 <td>${statusBadge(item.transaction_type)}</td>
+                <td>${escapeHtml(transactionPathText(item))}${transactionStageNote(item) ? `<small class="cell-subtitle">${escapeHtml(transactionStageNote(item))}</small>` : ""}</td>
                 <td class="number-cell ${quantity >= 0 ? "quantity-positive" : "quantity-negative"}">${quantity > 0 ? "+" : ""}${formatNumber(quantity)}</td>
                 <td class="number-cell">${formatNumber(item.before_quantity)}</td>
                 <td class="number-cell">${formatNumber(item.after_quantity)}</td>
-                <td>${escapeHtml(label(item.related_doc_type))} #${escapeHtml(item.related_doc_id ?? "--")}</td>
+                <td>${escapeHtml(relatedDoc)}</td>
                 <td>${formatTime(item.transaction_time)}</td>
               </tr>`;
           })
           .join("")
-      : emptyRow(8, "暂无库存流水");
+      : emptyRow(9, "暂无库存流水");
+
+    renderTransactionPagination(total);
+  }
+
+  function setTransactionPage(page) {
+    const safePage = Math.max(1, Number(page || 1));
+    if (safePage === state.transactionPage) return;
+    state.transactionPage = safePage;
+    renderTransactions();
+  }
+
+  async function loadTransactions(force = false) {
+    await loadLookups();
+    state.transactionsRows = listItems(await API.getTransactions());
+    populateTransactionFilters(state.transactionsRows);
+    renderTransactions();
     state.loadedViews.add("transactions");
   }
 
@@ -1497,6 +1880,17 @@
     return normalized || null;
   }
 
+  function requireSearchPickerValue(hiddenId, message) {
+    const hidden = $(hiddenId);
+    const value = Number(hidden?.value || 0);
+    if (!value) {
+      showAlert(message, "warning");
+      showToast(message, "error");
+      return null;
+    }
+    return value;
+  }
+
   async function handleBaseDataCreate(form) {
     if (!canDo("create-base-data")) {
       showAlert("当前角色无权限操作", "warning");
@@ -1505,6 +1899,13 @@
 
     const type = form.dataset.createForm;
     const values = formValues(form);
+    let boundProductId = null;
+    let boundSupplierId = null;
+    if (type === "supplier-product") {
+      boundProductId = requireSearchPickerValue("bindProduct", "请先选择要绑定的商品");
+      boundSupplierId = requireSearchPickerValue("bindSupplier", "请先选择供应商");
+      if (!boundProductId || !boundSupplierId) return;
+    }
     const configurations = {
       product: {
         request: () =>
@@ -1530,6 +1931,18 @@
             is_active: true,
           }),
         success: "供应商已新增",
+      },
+      "supplier-product": {
+        request: () =>
+          API.bindSupplierProduct(boundSupplierId, {
+            product_id: boundProductId,
+            supply_price: Number(values.supply_price),
+            lead_time_days: Number(values.lead_time_days),
+            on_time_rate: Number(values.on_time_rate),
+            quality_score: Number(values.quality_score),
+            is_preferred: values.is_preferred === "true",
+          }),
+        success: "供应关系已保存，后续入库会按商品匹配供应商",
       },
       warehouse: {
         request: () =>
@@ -1568,6 +1981,17 @@
     });
     if (!result) return;
 
+    if (type === "product" && result.id) {
+      state.pendingSupplierBindingProductId = Number(result.id);
+    }
+    if (type === "supplier" && result.id) {
+      state.pendingSupplierBindingSupplierId = Number(result.id);
+    }
+    if (type === "supplier-product") {
+      state.pendingSupplierBindingProductId = Number(result.product_id || 0) || null;
+      state.pendingSupplierBindingSupplierId = Number(result.supplier_id || 0) || null;
+    }
+
     state.lookupsLoaded = false;
     form.reset();
     await Promise.all([loadBaseData(), hasModuleAccess("dashboard") ? loadDashboard() : Promise.resolve()]);
@@ -1580,19 +2004,22 @@
     }
 
     const values = formValues(form);
+    const productId = requireSearchPickerValue("inboundProduct", "请选择有效的入库商品");
+    const supplierId = requireSearchPickerValue("inboundSupplier", "请先选择商品，再选择匹配的供应商");
+    if (!productId || !supplierId) return;
     const button = form.querySelector('[type="submit"]');
     const result = await runButtonAction(
       button,
       () =>
         API.createInboundOrder({
-          supplier_id: Number(values.supplier_id),
+          supplier_id: supplierId,
           warehouse_id: Number(values.warehouse_id),
           handled_by: Number(state.currentUser?.id || 1),
           status: "pending",
           remark: optionalValue(values.remark),
           items: [
             {
-              product_id: Number(values.product_id),
+              product_id: productId,
               quantity: Number(values.quantity),
               batch_no: optionalValue(values.batch_no),
             },
@@ -1607,6 +2034,7 @@
 
     window.bootstrap.Modal.getOrCreateInstance($("createInboundModal")).hide();
     form.reset();
+    populateBusinessSelects();
     await loadInbound();
   }
 
@@ -1617,13 +2045,15 @@
     }
 
     const values = formValues(form);
+    const productId = requireSearchPickerValue("requestProduct", "请选择有效的补货商品");
+    if (!productId) return;
     const button = form.querySelector('[type="submit"]');
     const result = await runButtonAction(
       button,
       () =>
         API.createReplenishmentRequest({
           store_id: Number(values.store_id),
-          product_id: Number(values.product_id),
+          product_id: productId,
           request_quantity: Number(values.request_quantity),
           request_reason: optionalValue(values.request_reason),
           created_by: Number(state.currentUser?.id || 1),
@@ -1637,6 +2067,7 @@
 
     window.bootstrap.Modal.getOrCreateInstance($("createRequestModal")).hide();
     form.reset();
+    populateBusinessSelects();
     await loadFulfillment();
   }
 
@@ -1669,6 +2100,15 @@
     if ($("inventoryOverviewPagination")) $("inventoryOverviewPagination").hidden = true;
   }
 
+  function resetTransactionFilters() {
+    state.transactionPage = 1;
+    if ($("transactionKeywordInput")) $("transactionKeywordInput").value = "";
+    if ($("transactionWarehouseFilter")) $("transactionWarehouseFilter").innerHTML = '<option value="all">全部仓库</option>';
+    if ($("transactionTypeFilter")) $("transactionTypeFilter").innerHTML = '<option value="all">全部类型</option>';
+    if ($("transactionSortFilter")) $("transactionSortFilter").value = "desc";
+    if ($("transactionPagination")) $("transactionPagination").hidden = true;
+  }
+
   async function enterWorkspace(role, username = role) {
     state.currentRole = role;
     state.currentUser = buildDemoUser(role, username);
@@ -1679,7 +2119,13 @@
     state.loadedInventoryTabs.clear();
     state.inventoryOverviewRows = [];
     state.inventoryWarningRows = [];
+    state.transactionsRows = [];
+    state.supplierProductsBySupplier.clear();
+    state.supplierIdsByProduct.clear();
+    state.pendingSupplierBindingProductId = null;
+    state.pendingSupplierBindingSupplierId = null;
     resetInventoryFilters();
+    resetTransactionFilters();
 
     updateRoleIdentity();
     renderNavigation();
@@ -1706,7 +2152,13 @@
     state.loadedInventoryTabs.clear();
     state.inventoryOverviewRows = [];
     state.inventoryWarningRows = [];
+    state.transactionsRows = [];
+    state.supplierProductsBySupplier.clear();
+    state.supplierIdsByProduct.clear();
+    state.pendingSupplierBindingProductId = null;
+    state.pendingSupplierBindingSupplierId = null;
     resetInventoryFilters();
+    resetTransactionFilters();
     clearAlert();
     updateHistory("");
     closeMobileMenu();
@@ -1823,6 +2275,90 @@
       setInventoryOverviewPage(state.inventoryOverviewPage + 1);
     });
 
+    $("inboundProductSearch")?.addEventListener("input", () => {
+      const matched = syncSearchPickerSelection(
+        "inboundProductSearch",
+        "inboundProduct",
+        inboundProducts(),
+        productSearchLabel,
+        [(item) => item.name, (item) => item.product_code, (item) => String(item.id)],
+      );
+      if (matched) {
+        $("inboundProductSearch").value = productSearchLabel(matched);
+      }
+      refreshInboundSupplierPicker();
+    });
+
+    $("inboundSupplierSearch")?.addEventListener("input", () => {
+      const productId = Number($("inboundProduct")?.value || 0);
+      const matched = syncSearchPickerSelection(
+        "inboundSupplierSearch",
+        "inboundSupplier",
+        inboundSuppliersForProduct(productId),
+        supplierSearchLabel,
+        [(item) => item.name, (item) => String(item.id)],
+      );
+      if (matched) {
+        $("inboundSupplierSearch").value = supplierSearchLabel(matched);
+      }
+    });
+
+    $("requestProductSearch")?.addEventListener("input", () => {
+      const matched = syncSearchPickerSelection(
+        "requestProductSearch",
+        "requestProduct",
+        [...state.products.values()],
+        productSearchLabel,
+        [(item) => item.name, (item) => item.product_code, (item) => String(item.id)],
+      );
+      if (matched) {
+        $("requestProductSearch").value = productSearchLabel(matched);
+      }
+    });
+
+    $("bindProductSearch")?.addEventListener("input", () => {
+      const matched = syncSearchPickerSelection(
+        "bindProductSearch",
+        "bindProduct",
+        [...state.products.values()],
+        productSearchLabel,
+        [(item) => item.name, (item) => item.product_code, (item) => String(item.id)],
+      );
+      if (matched) {
+        $("bindProductSearch").value = productSearchLabel(matched);
+      }
+    });
+
+    $("bindSupplierSearch")?.addEventListener("input", () => {
+      const matched = syncSearchPickerSelection(
+        "bindSupplierSearch",
+        "bindSupplier",
+        [...state.suppliers.values()],
+        supplierSearchLabel,
+        [(item) => item.name, (item) => String(item.id)],
+      );
+      if (matched) {
+        $("bindSupplierSearch").value = supplierSearchLabel(matched);
+      }
+    });
+
+    ["transactionKeywordInput", "transactionWarehouseFilter", "transactionTypeFilter", "transactionSortFilter"].forEach(
+      (id) => {
+        $(id)?.addEventListener(id === "transactionKeywordInput" ? "input" : "change", () => {
+          state.transactionPage = 1;
+          renderTransactions();
+        });
+      },
+    );
+
+    $("transactionPrevPageBtn")?.addEventListener("click", () => {
+      setTransactionPage(state.transactionPage - 1);
+    });
+
+    $("transactionNextPageBtn")?.addEventListener("click", () => {
+      setTransactionPage(state.transactionPage + 1);
+    });
+
     document.querySelectorAll(".module-refresh").forEach((button) => {
       button.addEventListener("click", () => refreshView(button.dataset.loader, button));
     });
@@ -1866,9 +2402,21 @@
       await handleInboundCreate(event.currentTarget);
     });
 
+    $("createInboundForm").addEventListener("reset", () => {
+      window.setTimeout(() => populateBusinessSelects(), 0);
+    });
+
     $("createRequestForm").addEventListener("submit", async (event) => {
       event.preventDefault();
       await handleRequestCreate(event.currentTarget);
+    });
+
+    $("createRequestForm").addEventListener("reset", () => {
+      window.setTimeout(() => populateBusinessSelects(), 0);
+    });
+
+    $("supplierProductForm")?.addEventListener("reset", () => {
+      window.setTimeout(() => populateBusinessSelects(), 0);
     });
 
     document.addEventListener("click", (event) => {

@@ -233,7 +233,7 @@
               <div>
                 <span class="section-tag">MASTER DATA</span>
                 <h2>基础数据录入</h2>
-                <p>新增商品、供应商和履约节点，新数据会立即进入后续业务选择项。</p>
+                <p>新增商品、供应商和履约节点后，可继续绑定商品与供应商关系，新数据会立即进入后续业务选择项。</p>
               </div>
               <button class="btn btn-outline-primary app-btn module-refresh" type="button" data-loader="data">
                 <span class="btn-label">刷新数据概况</span>
@@ -306,6 +306,37 @@
                   <label class="form-span-2"><span>地址</span><input class="form-control" name="address" placeholder="门店详细地址" /></label>
                 </div>
                 <button class="btn btn-primary app-btn form-submit" type="submit" data-action-permission="create-base-data"><span class="btn-label">保存门店</span></button>
+              </form>
+
+              <form class="content-card data-form data-form-wide" id="supplierProductForm" data-create-form="supplier-product">
+                <div class="card-heading">
+                  <div>
+                    <span class="section-tag">SUPPLY LINK</span>
+                    <h3>绑定商品与供应商</h3>
+                  </div>
+                  <span class="form-sequence">05</span>
+                </div>
+                <p class="form-helper-text">新增商品后，在这里指定哪些供应商可以供货，采购入库时才会出现对应匹配关系。</p>
+                <div class="form-grid">
+                  <label>
+                    <span>商品 *</span>
+                    <input class="form-control" id="bindProductSearch" list="bindProductOptions" placeholder="搜索商品名称或编码" autocomplete="off" required />
+                    <input type="hidden" id="bindProduct" name="product_id" />
+                    <datalist id="bindProductOptions"></datalist>
+                  </label>
+                  <label>
+                    <span>供应商 *</span>
+                    <input class="form-control" id="bindSupplierSearch" list="bindSupplierOptions" placeholder="搜索供应商名称" autocomplete="off" required />
+                    <input type="hidden" id="bindSupplier" name="supplier_id" />
+                    <datalist id="bindSupplierOptions"></datalist>
+                  </label>
+                  <label><span>供货单价 *</span><input class="form-control" name="supply_price" type="number" min="0" step="0.01" value="10" required /></label>
+                  <label><span>到货周期（天） *</span><input class="form-control" name="lead_time_days" type="number" min="0" value="3" required /></label>
+                  <label><span>准时率 *</span><input class="form-control" name="on_time_rate" type="number" min="0" max="1" step="0.01" value="0.95" required /></label>
+                  <label><span>质量评分 *</span><input class="form-control" name="quality_score" type="number" min="0" max="10" step="0.1" value="8.5" required /></label>
+                  <label class="form-span-2"><span>优先供应商</span><select class="form-select" name="is_preferred"><option value="true">是</option><option value="false" selected>否</option></select></label>
+                </div>
+                <button class="btn btn-primary app-btn form-submit" type="submit" data-action-permission="create-base-data"><span class="btn-label">保存供应关系</span></button>
               </form>
             </div>
           </section>
@@ -574,6 +605,33 @@
                 <div><span class="section-tag">TRANSACTIONS</span><h3>库存变动记录</h3></div>
                 <span class="soft-badge" id="transactionResultBadge">0 条流水</span>
               </div>
+
+              <div class="transaction-filter-bar">
+                <label class="filter-field transaction-search">
+                  <span>搜索流水</span>
+                  <input class="form-control" id="transactionKeywordInput" type="text" placeholder="搜索流水编号、商品名称或单据编号" />
+                </label>
+                <label class="filter-field">
+                  <span>仓库筛选</span>
+                  <select class="form-select" id="transactionWarehouseFilter">
+                    <option value="all">全部仓库</option>
+                  </select>
+                </label>
+                <label class="filter-field">
+                  <span>类型筛选</span>
+                  <select class="form-select" id="transactionTypeFilter">
+                    <option value="all">全部类型</option>
+                  </select>
+                </label>
+                <label class="filter-field">
+                  <span>时间排序</span>
+                  <select class="form-select" id="transactionSortFilter">
+                    <option value="desc">最新在前</option>
+                    <option value="asc">最早在前</option>
+                  </select>
+                </label>
+              </div>
+
               <div class="table-responsive">
                 <table class="table app-table align-middle">
                   <thead>
@@ -581,6 +639,7 @@
                       <th>流水编号</th>
                       <th>商品</th>
                       <th>操作类型</th>
+                      <th>涉及位置</th>
                       <th>变动数量</th>
                       <th>变化前</th>
                       <th>变化后</th>
@@ -590,6 +649,16 @@
                   </thead>
                   <tbody id="transactionTableBody"></tbody>
                 </table>
+              </div>
+
+              <div class="table-pagination" id="transactionPagination" hidden>
+                <button class="btn btn-outline-primary app-btn pagination-btn" id="transactionPrevPageBtn" type="button">
+                  上一页
+                </button>
+                <span class="pagination-text" id="transactionPageInfo">第 1 / 1 页</span>
+                <button class="btn btn-outline-primary app-btn pagination-btn" id="transactionNextPageBtn" type="button">
+                  下一页
+                </button>
               </div>
             </article>
           </section>
@@ -754,9 +823,19 @@
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="关闭"></button>
             </div>
             <div class="modal-body form-grid">
-              <label><span>供应商 *</span><select class="form-select" id="inboundSupplier" name="supplier_id" required></select></label>
+              <label>
+                <span>入库商品 *</span>
+                <input class="form-control" id="inboundProductSearch" list="inboundProductOptions" placeholder="搜索商品名称或编码" autocomplete="off" required />
+                <input id="inboundProduct" name="product_id" type="hidden" />
+                <datalist id="inboundProductOptions"></datalist>
+              </label>
+              <label>
+                <span>供应商 *</span>
+                <input class="form-control" id="inboundSupplierSearch" list="inboundSupplierOptions" placeholder="请先选择商品" autocomplete="off" required />
+                <input id="inboundSupplier" name="supplier_id" type="hidden" />
+                <datalist id="inboundSupplierOptions"></datalist>
+              </label>
               <label><span>目标仓库 *</span><select class="form-select" id="inboundWarehouse" name="warehouse_id" required></select></label>
-              <label><span>入库商品 *</span><select class="form-select" id="inboundProduct" name="product_id" required></select></label>
               <label><span>入库数量 *</span><input class="form-control" name="quantity" type="number" min="1" value="10" required /></label>
               <label><span>批次号</span><input class="form-control" name="batch_no" placeholder="例如 B20260629001" /></label>
               <label><span>备注</span><input class="form-control" name="remark" placeholder="采购到货入库" /></label>
@@ -780,7 +859,12 @@
             </div>
             <div class="modal-body form-grid">
               <label><span>申请门店 *</span><select class="form-select" id="requestStore" name="store_id" required></select></label>
-              <label><span>补货商品 *</span><select class="form-select" id="requestProduct" name="product_id" required></select></label>
+              <label>
+                <span>补货商品 *</span>
+                <input class="form-control" id="requestProductSearch" list="requestProductOptions" placeholder="搜索商品名称或编码" autocomplete="off" required />
+                <input id="requestProduct" name="product_id" type="hidden" />
+                <datalist id="requestProductOptions"></datalist>
+              </label>
               <label><span>申请数量 *</span><input class="form-control" name="request_quantity" type="number" min="1" value="10" required /></label>
               <label><span>申请原因</span><input class="form-control" name="request_reason" placeholder="例如 门店库存低于安全线" /></label>
             </div>

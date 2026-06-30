@@ -824,6 +824,17 @@ select {
   margin-bottom: 16px;
 }
 
+.transaction-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.transaction-search {
+  min-width: 0;
+}
+
 .filter-field {
   min-width: 0;
   display: grid;
@@ -837,7 +848,9 @@ select {
 }
 
 .inventory-filter-bar .form-control,
-.inventory-filter-bar .form-select {
+.inventory-filter-bar .form-select,
+.transaction-filter-bar .form-control,
+.transaction-filter-bar .form-select {
   min-height: 42px;
   border-color: #dfe3eb;
   border-radius: 8px;
@@ -1971,11 +1984,21 @@ select {
   flex-direction: column;
 }
 
+.data-form-wide {
+  grid-column: 1 / -1;
+}
+
 .form-sequence {
   color: #bdc4d1;
   font-family: "Consolas", monospace;
   font-size: 13px;
   font-weight: 800;
+}
+
+.form-helper-text {
+  margin: 4px 0 16px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .form-grid {
@@ -2088,7 +2111,9 @@ body {
 }
 
 .inventory-filter-bar .form-control,
-.inventory-filter-bar .form-select {
+.inventory-filter-bar .form-select,
+.transaction-filter-bar .form-control,
+.transaction-filter-bar .form-select {
   font-size: 15px;
 }
 
@@ -2261,6 +2286,10 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .transaction-filter-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .header-actions {
     gap: 7px;
   }
@@ -2423,6 +2452,10 @@ body {
 
   .inventory-tab {
     flex: 1 1 0;
+  }
+
+  .transaction-filter-bar {
+    grid-template-columns: 1fr;
   }
 
   .connection-list > div {

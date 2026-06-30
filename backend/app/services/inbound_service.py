@@ -4,8 +4,9 @@ from sqlalchemy.orm import Session
 from app.core.cache import invalidate_business_cache
 from app.core.exceptions import BusinessException
 from app.models.inbound import InboundItem, InboundOrder
+from app.models.product import Product
 from app.models.purchase import PurchaseOrder
-from app.models.supplier import Supplier
+from app.models.supplier import Supplier, SupplierProduct
 from app.models.user import User
 from app.models.warehouse import Warehouse
 from app.schemas.inbound import InboundOrderCreate
@@ -32,6 +33,16 @@ def create_inbound_order(db: Session, payload: InboundOrderCreate) -> InboundOrd
     for item in payload.items:
         if item.quantity <= 0:
             raise BusinessException("quantity must be greater than 0")
+        if not db.get(Product, item.product_id):
+            raise BusinessException(f"product {item.product_id} not found", 404)
+        relation = db.scalar(
+            select(SupplierProduct.id).where(
+                SupplierProduct.supplier_id == payload.supplier_id,
+                SupplierProduct.product_id == item.product_id,
+            )
+        )
+        if not relation:
+            raise BusinessException("所选供应商不供应当前商品")
         order.items.append(
             InboundItem(
                 product_id=item.product_id,
