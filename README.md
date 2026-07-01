@@ -1,127 +1,79 @@
 # Supply_Chain_Management
 
-## Real Walmart Import
+本项目为供应链库存协同与智能补货管理系统。系统面向中小型连锁企业、校园商超、社区便利店等多仓库、多门店零售场景，以库存管理为核心，对商品从供应商采购进入仓库，再由仓库配送至门店的全过程进行统一建模、记录和分析。
 
-后端现在支持从本地 Walmart 数据集导入真实销售额，并同时兼容：
+项目通过需求分析和数据库建模，在商品、供应商、仓库、门店、采购订单、入库单、出库单、库存和库存流水等基础实体上，结合项目实际，补充了库存预警、门店补货申请、供应商管理与排行、统计分析、AI API 增强的智能补货建议、OceanBase 主数据库部署、系统状态检查、角色化演示界面和多端共享数据访问等内容。
 
-- 标准 `train.csv + features.csv + stores.csv`
-- 当前仓库实际提供的 M5 `sales_train_validation.csv + calendar.csv + sell_prices.csv`
+## Demo演示视频
 
-导入命令、字段映射、OceanBase/SQLite 验证方式和数据边界见：
+- [Demo视频](/docs/demo视频.mp4)
 
-- [Walmart 数据接入说明](docs/Walmart数据接入说明.md)
-
-供应链库存协同与智能补货管理系统。这个项目面向数据库课程期末演示，围绕“采购入库 → 库存变更 → 门店补货 → 审核流转 → 出库发货 → 门店签收 → AI 补货建议 → 统计分析”搭建了一条可完整演示的业务闭环。
-
-当前版本采用：
-
-- 后端：FastAPI + SQLAlchemy + Pydantic
-- 数据库：OceanBase / MySQL 兼容数据库优先，SQLite 自动兜底
-- 前端：Bootstrap CDN + ECharts CDN + 原生 JavaScript
-- 接口风格：统一返回 `{success, message, data}`
-- 演示入口：`/demo`（会跳转到 `/ui/`）
-
-## 项目演示链路
-
-```text
-系统状态检查
-  -> 首页看板
-  -> 基础数据录入
-  -> 库存查询与预警
-  -> 采购入库
-  -> 库存流水追溯
-  -> 门店补货申请
-  -> 审核通过 / 拒绝
-  -> 转出库单
-  -> 出库发货
-  -> 门店签收
-  -> AI 补货建议
-  -> 供应商排行与统计分析
-```
-
-## 核心功能
-
-- 基础数据管理：商品、供应商、仓库、门店等基础信息维护。
-- 采购与入库：创建采购入库单，完成入库后自动增加库存并生成库存流水。
-- 补货与出库：支持门店补货申请、审核、拒绝、转出库单、发货、签收。
-- 库存预警：展示低库存、缺货、积压等风险状态。
-- AI 补货建议：根据库存与业务数据生成建议数量、风险等级和推荐理由。
-- 统计分析：展示库存排行、仓库流转趋势、供应商排行等分析结果。
-- 系统状态：查看服务状态、数据库连接情况以及示例数据状态。
-- 角色化演示界面：同一套前端可按角色切换可见模块，适合课堂现场演示。
-
-## 角色与可见模块
-
-`/demo` 页面提供轻量级角色登录入口。当前角色保存在浏览器 `localStorage` 中，用于演示不同岗位看到的工作台差异。
-
-| 角色 | 可见模块 |
-|---|---|
-| 系统管理员 `admin` | 首页看板、基础数据录入、库存查询与预警、采购入库演示、门店补货与出库、库存流水追溯、AI 补货建议、统计分析、供应商排行、系统状态 |
-| 采购人员 `purchaser` | 首页看板、库存查询与预警、采购入库演示、供应商排行、系统状态 |
-| 仓库人员 `warehouse` | 首页看板、库存查询与预警、采购入库演示、门店补货与出库、库存流水追溯、系统状态 |
-| 门店人员 `store` | 首页看板、门店补货与出库、AI 补货建议、系统状态 |
-| 业务主管 `manager` | 首页看板、库存查询与预警、门店补货与出库、AI 补货建议、统计分析、供应商排行、系统状态 |
-
-演示页默认登录方式：
-
-- 用户名：任意演示名，默认是 `demo`
-- 密码：`demo123`
-- 角色：从下拉框中选择
-
-说明：
-
-- 这套角色控制是前端演示级隔离，不是企业级真实认证。
-- 当前没有 JWT、数据库权限表、后端强校验 RBAC。
-- 如果需要真实权限系统，需要后续在后端继续扩展。
-
-## Repository Structure
+## 1. Repository Structure
 
 ```text
 Supply_Chain_Management/
 ├── backend/
 │   ├── app/
-│   │   ├── api/routers/            # 各业务接口
-│   │   ├── core/                   # 配置、数据库连接、统一响应等基础设施
-│   │   ├── models/                 # ORM 模型
-│   │   ├── schemas/                # Pydantic 模型
-│   │   └── services/               # 业务服务层
-│   ├── example/                    # 示例业务数据 JSON
-│   ├── schema/                     # SQLite schema 与本地数据库文件
-│   ├── scripts/                    # 初始化数据库、生成/导入示例数据
-│   ├── tests/                      # pytest 测试
-│   ├── docs/                       # 后端补充文档
-│   ├── .env.example                # 环境变量模板
-│   └── requirements.txt            # 后端依赖
-├── frontend/
-│   ├── index.html                  # 演示页面入口
-│   ├── api.js                      # 前端统一请求封装
-│   ├── app.js                      # 页面逻辑、权限控制、图表渲染
-│   ├── style.css                   # 当前演示页面主样式
-│   └── styles.css                  # 历史样式文件（保留）
-├── docs/
-│   ├── api_contract.md             # 前后端冻结接口契约
-│   └── project_workplan.md         # 项目分工与开发计划
-├── requirements.txt                # 根目录依赖清单
+│   │   ├── api/             # API 路由
+│   │   ├── core/            # 配置、数据库、响应、异常
+│   │   ├── models/          # SQLAlchemy 数据模型
+│   │   ├── schemas/         # Pydantic 请求和响应结构
+│   │   ├── services/        # 业务逻辑
+│   │   └── utils/           # 工具函数
+│   ├── docs/                # 后端文档
+│   ├── example/             # 示例 JSON 数据
+│   ├── schema/              # 数据库 schema 和 SQLite 文件
+│   ├── scripts/             # 初始化、导入、重置数据脚本
+│   ├── tests/               # 自动化测试
+│   ├── .env.example
+│   └── requirements.txt
+├── frontend/                # 前端演示页面
+│   ├── index.html           # 演示页面入口
+│   ├── api.js               # 统一请求封装
+│   ├── app.js               # 页面逻辑、角色控制、图表渲染
+│   ├── style.css            # 当前演示页面主样式
+│   └── styles.css           # 历史样式文件，保留
+├── docs/                    # 项目文档
 └── README.md
 ```
 
-## Quick Start
+## 2. 系统安装、运行与使用说明
 
-### 1. 获取项目
+本节用于完成系统部署、后端启动、前端访问和基础功能使用。按照以下步骤执行后，可以在本地运行完整演示系统。
 
-如果你已经有项目文件，直接进入根目录即可：
-
-```powershell
-cd C:\Users\Nancy\Desktop\大学\大二下\数据库\Supply_Chain_Management
-```
-
-### 2. 配置后端环境
+### 2.1 安装后端环境
 
 进入后端目录：
 
-```powershell
-cd backend
+```bash
+cd Supply_Chain_Management/backend
 ```
+
+创建并激活虚拟环境：
+
+```bash
+python -m venv .venv
+```
+
+Windows：
+
+```bash
+.venv\Scripts\activate
+```
+
+macOS / Linux：
+
+```bash
+source .venv/bin/activate
+```
+
+安装依赖：
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2.2 配置运行环境
 
 复制环境变量模板：
 
@@ -129,121 +81,248 @@ cd backend
 Copy-Item .env.example .env
 ```
 
-如果你只是想最快跑通本地 demo，推荐把 `backend/.env` 中的 `DATABASE_URL` 改成 SQLite：
+正式演示建议在 `.env` 中配置 OceanBase 和 AI API：
 
 ```env
-DATABASE_URL=sqlite:///./schema/supply_chain.db
+DATABASE_URL=mysql+pymysql://root:your-password@127.0.0.1:2881/supply_chain?charset=utf8mb4
+SQLITE_FALLBACK_URL=sqlite:///./schema/supply_chain.db
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=your-api-key
+DEEPSEEK_MODEL=deepseek-chat
 ```
 
-如果你希望展示 OceanBase / MySQL 兼容数据库，也可以保留或修改为对应连接串。当前系统在首选数据库不可用时，会自动回退到 `SQLITE_FALLBACK_URL`。
+### 2.3 Docker / OceanBase 环境准备
 
-### 3. 安装依赖
+本项目优先使用 OceanBase 作为主数据库，SQLite 作为应急回退。若只做本地快速演示，可直接使用 SQLite；若需要展示 OceanBase，请按以下步骤准备。
 
-```powershell
-pip install -r requirements.txt
+确认 Docker 已启动：
+
+```bash
+docker --version
+docker ps
 ```
 
-### 4. 初始化数据库
+启动 OceanBase 容器：
 
-```powershell
+```bash
+docker run -d --name oceanbase-ce --restart unless-stopped -p 2881:2881 -e MODE=mini -e OB_TENANT_PASSWORD=ObDemo2026 -e OB_DATABASE=supply_chain oceanbase/oceanbase-ce
+```
+
+如果容器已经存在但处于停止状态，使用：
+
+```bash
+docker start oceanbase-ce
+```
+
+在 `backend/.env` 中配置：
+
+```env
+DATABASE_URL=mysql+pymysql://root%40test:ObDemo2026@127.0.0.1:2881/supply_chain?charset=utf8mb4
+SQLITE_FALLBACK_URL=sqlite:///./schema/supply_chain.db
+DATABASE_CONNECT_TIMEOUT_SECONDS=10
+```
+
+启动后端后访问以下接口确认实际数据库：
+
+```text
+http://127.0.0.1:8000/api/health/db
+```
+
+当 `mode` 显示 `oceanbase-primary` 时，表示当前连接 OceanBase；如果显示 `sqlite-fallback`，表示系统正在使用 SQLite 回退数据库。
+
+### 2.4 初始化数据库和示例数据
+
+```bash
 python scripts/init_db.py --rebuild
-```
-
-### 5. 生成并导入示例数据
-
-```powershell
 python scripts/generate_example_data.py
 python scripts/load_example_data.py
 ```
 
-### 6. 启动服务
+### 2.5 启动系统
 
-```powershell
+```bash
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 7. 打开页面
+### 2.6 访问系统
 
-启动后可访问：
-
-- 演示入口：http://127.0.0.1:8000/demo
-- 前端页面：http://127.0.0.1:8000/ui/
-- Swagger 文档：http://127.0.0.1:8000/docs
-- 根路径信息：http://127.0.0.1:8000/
-- 数据库健康检查：http://127.0.0.1:8000/api/health/db
-
-## API 约定
-
-本项目前后端协作以 `docs/api_contract.md` 为准，核心约定如下：
-
-- API 前缀：`/api`
-- 响应格式统一为 `{success, message, data}`
-- 前端请求统一封装在 `frontend/api.js`
-- 页面逻辑不散写 `fetch`
-
-成功响应示例：
-
-```json
-{
-  "success": true,
-  "message": "ok",
-  "data": {}
-}
+```text
+演示入口：http://127.0.0.1:8000/demo
+API 文档：http://127.0.0.1:8000/docs
+前端演示：http://127.0.0.1:8000/ui/
+健康检查：http://127.0.0.1:8000/api/health
+数据库健康检查：http://127.0.0.1:8000/api/health/db
 ```
 
-失败响应示例：
+说明：`/demo` 是推荐演示入口，会进入带登录页的前端演示；`/ui/` 是前端页面直接入口。
 
-```json
-{
-  "success": false,
-  "message": "错误信息",
-  "data": null
-}
+
+## 3. 使用说明与功能验证
+
+前端演示登录说明：
+
+- 用户名：任意演示名，默认可用 `demo`
+- 密码：`demo123`
+- 角色：从下拉框选择系统管理员、采购人员、仓库人员、门店人员或业务主管
+
+后端用户登录接口也可用于接口测试：
+
+```text
+POST /api/users/login
 ```
 
-## 本地测试
+系统启动后，可按以下顺序进行功能验证：
 
-进入后端目录后运行：
+1. 访问 `/api/health` 和 `/api/health/db`，确认后端服务和数据库连接正常。
+2. 打开 `/demo`，使用 `demo / demo123` 进入前端演示界面。
+3. 在系统状态页确认 API、数据库和数据导入状态。
+4. 在首页看板查看商品、供应商、库存、补货建议等统计指标。
+5. 完成一张采购入库单，验证仓库库存增加并生成库存流水。
+6. 新建门店补货申请，依次验证审核、拒绝、转出库单、发货和签收流程。
+7. 生成 AI 补货建议，查看推荐数量、风险等级、推荐理由和采用状态。
+8. 打开 `/docs`，测试用户登录、商品新增、库存调整、补货建议采用或拒绝等接口。
+
+## 4. Demo 视频
+
+Demo 视频用于展示系统从启动、登录、看板查看到采购入库、门店补货、出库签收和 AI 补货建议的完整业务流程。
+
+```text
+Demo 视频：待补充
+```
+
+## 5. 多电脑共享访问
+
+如果希望一台电脑新增或修改数据后，其他电脑也能看到，需要让所有电脑访问同一个后端服务和同一个数据库。
+
+在作为服务器的电脑上启动：
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+查询服务器电脑的局域网 IP，例如 `192.168.1.23`。其他电脑访问：
+
+```text
+演示入口：http://192.168.1.23:8000/demo
+API 文档：http://192.168.1.23:8000/docs
+前端演示：http://192.168.1.23:8000/ui/
+```
+
+共享访问模式下，所有新增商品、库存调整、补货申请、出库发货等操作都会写入同一份数据库，因此其他电脑刷新页面后可以看到最新记录。
+
+说明：
+
+- `127.0.0.1` 只代表当前电脑。
+- 多电脑演示时不能每个人各自运行一套本地后端。
+- 推荐使用 OceanBase/MySQL 作为共享数据库；SQLite 仅作为本地开发或应急排查时的回退数据库。
+
+## 6. OceanBase 说明
+
+OceanBase 在本项目中作为主数据库服务，不是网站部署平台。系统通过 SQLAlchemy + PyMySQL 接入 OceanBase 的 MySQL 兼容协议，并通过数据库健康检查接口展示当前运行模式。
+
+本地 Docker 启动示例：
+
+```bash
+docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d oceanbase/oceanbase-ce
+```
+
+`.env` 配置示例：
+
+```env
+DATABASE_URL=mysql+pymysql://root:your-password@127.0.0.1:2881/supply_chain?charset=utf8mb4
+SQLITE_FALLBACK_URL=sqlite:///./schema/supply_chain.db
+```
+
+SQLite 保留为应急回退数据库，用于本地开发、环境排查或主数据库临时不可连接时的保底运行。
+
+## 7. AI API 说明
+
+系统已接入 LLM 路由层，可根据 `backend/.env` 配置选择 DeepSeek、Ollama 或规则模型。AI API 用于对补货建议理由和经营摘要进行文本增强；库存预警、补货数量和风险等级仍由系统规则模型计算，因此 AI 服务不可用时，核心业务流程仍可运行。
+
+### 7.1 配置文件位置
+
+AI 相关配置写在后端目录下的 `.env` 文件中：
+
+```text
+Supply_Chain_Management/backend/.env
+```
+
+如果还没有 `.env`，先在 `backend` 目录复制模板：
 
 ```powershell
-pytest -q
+cd Supply_Chain_Management/backend
+Copy-Item .env.example .env
 ```
 
-当前仓库已包含的测试覆盖包括：
+### 7.2 使用 DeepSeek API
 
-- 登录接口
-- 健康检查
-- 示例数据导入
-- 入库与库存事务
-- 出库库存校验
-- AI 补货建议
-- 分布式库存核对
-- 若干接口修复项
+在 `backend/.env` 中填写：
 
-## 演示建议
+```env
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=你的DeepSeek API Key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+LLM_TIMEOUT_SECONDS=30
+LLM_MAX_RETRIES=2
+```
 
-适合课堂展示的最短路径如下：
+其中 `DEEPSEEK_API_KEY` 为 API Key 填写位置。修改 `.env` 后需要重启后端服务：
 
-1. 运行初始化脚本并导入示例数据
-2. 打开 `/demo`
-3. 先用系统管理员角色展示全模块
-4. 再切换为采购、仓库、门店、业务主管，展示不同导航与按钮权限
-5. 重点演示一条完整业务流：
-   采购入库 → 库存变化 → 补货申请 → 审核/拒绝 → 转出库单 → 发货 → 签收 → AI 建议 → 统计分析
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+```
 
-## 相关文档
+### 7.3 使用本地 Ollama
 
-- [接口契约](docs/api_contract.md)
-- [项目工作计划](docs/project_workplan.md)
-- [OceanBase 部署说明](backend/docs/OceanBase部署说明.md)
-- [后端结构与运行逻辑说明](backend/docs/后端结构与运行逻辑说明.md)
-- [示例数据说明](backend/example/README.md)
+如果使用本地 Ollama，不需要外部 API Key，但需要本机已启动 Ollama 服务并已下载模型。`backend/.env` 示例：
 
-## 当前限制说明
+```env
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen2.5:7b
+```
 
-- 角色登录目前以课堂演示为目标，主要依赖前端 `localStorage`，不是后端强认证。
-- 没有实现完整的 JWT、刷新令牌、后端鉴权中间件、权限数据库表。
-- 当前前端以 demo 展示为主，没有引入 React/Vue 等工程化框架。
-- SQLite 数据库文件 `backend/schema/supply_chain.db` 属于本地运行产物，可通过脚本重新生成。
+### 7.4 不使用外部 AI
 
-如果后续继续扩展，这个项目很适合往“真实登录鉴权”“审批流细化”“数据库部署切换”“一键演示脚本”几个方向继续完善。
+如果不配置 DeepSeek API Key，也不使用 Ollama，可以使用规则模型：
+
+```env
+LLM_PROVIDER=rule
+```
+
+规则模型会返回系统自动生成的补货理由，不调用外部 AI 服务。
+
+### 7.5 检查 AI 配置是否生效
+
+启动后端后访问：
+
+```text
+GET http://127.0.0.1:8000/api/llm/status
+```
+
+返回结果中重点查看：
+
+- `provider`：当前提供方，例如 `deepseek`、`ollama` 或 `rule`；
+- `model`：当前模型名称；
+- `available`：是否可用；
+- `key_configured`：DeepSeek API Key 是否已配置。
+
+### 7.6 生成 AI 智能补货建议
+
+前端可以在“智能补货建议”模块点击“生成补货建议”。也可以在 Swagger 中调用：
+
+```text
+POST http://127.0.0.1:8000/api/recommendations/generate?enhance_with_llm=true
+GET http://127.0.0.1:8000/api/recommendations
+```
+
+当 `enhance_with_llm=true` 时，系统会先用规则模型计算补货数量、风险等级和基础理由，再尝试调用 AI API 增强推荐理由。如果 AI API 调用失败，系统会保留规则理由并继续返回建议结果。
+
+
+
+## 8. 相关文档
+
+- [接口契约](/docs/接口契约.md)
+- [OceanBase 简介](/docs/OceanBase简介.md)
+- [手动数据操作示例](/docs/手动数据操作示例.md)
