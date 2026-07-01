@@ -6,6 +6,7 @@ from sqlalchemy import select
 from app.core.database import SessionLocal
 from app.core.exceptions import BusinessException
 from app.models.product import Product
+from app.models.replenishment import ReplenishmentRequest
 from app.models.store import Store
 from app.models.user import User
 from app.models.warehouse import Warehouse
@@ -363,3 +364,48 @@ def test_convert_to_outbound_splits_request_across_multiple_warehouses():
     finally:
         session.rollback()
         session.close()
+
+
+def test_convert_to_outbound_api_invalidates_request_when_auto_assignment_fails(api_client):
+    session = SessionLocal()
+    try:
+        request, product, _store, user = _create_approved_request(session, quantity=80)
+        warehouse_a, warehouse_b = _ensure_warehouses(session)
+        _set_inventory(
+            session,
+            product_id=product.id,
+            location_type="warehouse",
+            warehouse_id=warehouse_a.id,
+            current_quantity=30,
+            frozen_quantity=0,
+        )
+        _set_inventory(
+            session,
+            product_id=product.id,
+            location_type="warehouse",
+            warehouse_id=warehouse_b.id,
+            current_quantity=20,
+            frozen_quantity=0,
+        )
+        request_id = request.id
+        user_id = user.id
+        session.commit()
+    finally:
+        session.close()
+
+    response = api_client.post(
+        f"/api/replenishment-requests/{request_id}/convert-to-outbound?handled_by={user_id}"
+    )
+
+    assert response.status_code == 400
+    assert response.json()["message"] == "所有仓库库存不足，无法生成出库单"
+
+    verify_session = SessionLocal()
+    try:
+        refreshed = verify_session.get(ReplenishmentRequest, request_id)
+        assert refreshed is not None
+        assert refreshed.audit_status == "invalidated"
+        assert refreshed.generated_outbound_order_id is None
+    finally:
+        verify_session.rollback()
+        verify_session.close()

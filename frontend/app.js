@@ -11,12 +11,20 @@
     manager: "业务主管",
   });
 
-  const ROLE_USER_IDS = Object.freeze({
-    admin: 1,
-    purchaser: 2,
-    warehouse: 3,
-    store: 4,
-    manager: 5,
+  const ROLE_BACKEND_USERNAMES = Object.freeze({
+    admin: "admin",
+    purchaser: "buyer",
+    warehouse: "warehouse",
+    store: "store",
+    manager: "manager",
+  });
+
+  const ROLE_BACKEND_CODES = Object.freeze({
+    admin: ["admin"],
+    purchaser: ["buyer", "purchaser"],
+    warehouse: ["warehouse_manager", "warehouse"],
+    store: ["store_staff", "store"],
+    manager: ["manager"],
   });
 
   const MODULE_DEFINITIONS = Object.freeze({
@@ -79,6 +87,7 @@
     completed: "已完成",
     approved: "已通过",
     converted: "已转出库",
+    invalidated: "已失效",
     rejected: "已拒绝",
     shipped: "已发货",
     signed: "已签收",
@@ -283,13 +292,49 @@
     return roles.includes(state.currentRole);
   }
 
-  function buildDemoUser(role, username = role) {
+  function buildDemoUser(role, username = role, id = null, realName = null) {
     return {
-      id: ROLE_USER_IDS[role] || 1,
+      id,
       username,
       role,
-      real_name: ROLE_LABELS[role] || role,
+      real_name: realName || ROLE_LABELS[role] || role,
     };
+  }
+
+  async function resolveCurrentUser(role, username = role) {
+    const rows = listItems(await API.getUsers());
+    const normalizedUsername = String(username || "").trim().toLowerCase();
+    const expectedUsername = String(ROLE_BACKEND_USERNAMES[role] || "").trim().toLowerCase();
+    const roleCandidates = ROLE_BACKEND_CODES[role] || [role];
+
+    const matched =
+      rows.find((item) => String(item.username || "").trim().toLowerCase() === normalizedUsername) ||
+      rows.find((item) => String(item.username || "").trim().toLowerCase() === expectedUsername) ||
+      rows.find((item) => roleCandidates.includes(String(item.role || "").trim().toLowerCase()));
+
+    if (!matched) {
+      throw new Error(`未找到可用的${ROLE_LABELS[role] || role}后端用户，请先初始化演示用户数据`);
+    }
+
+    return buildDemoUser(
+      role,
+      matched.username || username,
+      Number(matched.id),
+      matched.real_name || ROLE_LABELS[role] || role,
+    );
+  }
+
+  async function ensureActiveUser() {
+    if (!state.currentRole) {
+      throw new Error("当前未登录，无法执行该操作");
+    }
+    const fallbackUsername =
+      state.currentUser?.username ||
+      window.localStorage.getItem("currentLoginName") ||
+      ROLE_BACKEND_USERNAMES[state.currentRole] ||
+      state.currentRole;
+    state.currentUser = await resolveCurrentUser(state.currentRole, fallbackUsername);
+    return state.currentUser;
   }
 
   function defaultViewForRole() {
@@ -748,6 +793,47 @@
     if (!selectedItem) return;
     hidden.value = String(selectedItem.id);
     input.value = formatter(selectedItem);
+  }
+
+  function syncInboundProductPicker() {
+    const matched = syncSearchPickerSelection(
+      "inboundProductSearch",
+      "inboundProduct",
+      inboundProducts(),
+      productSearchLabel,
+      [(item) => item.name, (item) => item.product_code, (item) => String(item.id)],
+    );
+    if (matched) {
+      $("inboundProductSearch").value = productSearchLabel(matched);
+    }
+    refreshInboundSupplierPicker();
+  }
+
+  function syncInboundSupplierPicker() {
+    const productId = Number($("inboundProduct")?.value || 0);
+    const matched = syncSearchPickerSelection(
+      "inboundSupplierSearch",
+      "inboundSupplier",
+      inboundSuppliersForProduct(productId),
+      supplierSearchLabel,
+      [(item) => item.name, (item) => String(item.id)],
+    );
+    if (matched) {
+      $("inboundSupplierSearch").value = supplierSearchLabel(matched);
+    }
+  }
+
+  function syncRequestProductPicker() {
+    const matched = syncSearchPickerSelection(
+      "requestProductSearch",
+      "requestProduct",
+      [...state.products.values()],
+      productSearchLabel,
+      [(item) => item.name, (item) => item.product_code, (item) => String(item.id)],
+    );
+    if (matched) {
+      $("requestProductSearch").value = productSearchLabel(matched);
+    }
   }
 
   function inboundProducts() {
@@ -1241,6 +1327,17 @@
               item.outbound_no ||
               relatedOutbound?.outbound_no ||
               (item.generated_outbound_order_id ? `#${item.generated_outbound_order_id}` : "--");
+            const assignmentNote =
+              item.audit_status === "approved"
+                ? "审核后已进入分仓阶段"
+                : item.audit_status === "invalidated"
+                  ? "自动分仓生成出库单失败，申请已失效"
+                  : "系统将按可用库存分配来源仓库";
+            const outboundNote = item.generated_outbound_order_id
+              ? "已生成出库单"
+              : item.audit_status === "invalidated"
+                ? "未生成出库单"
+                : "待生成出库单";
             return `
               <tr>
                 <td><strong>${escapeHtml(item.request_no)}</strong><small class="cell-subtitle">ID ${escapeHtml(item.id)}</small></td>
@@ -1249,8 +1346,8 @@
                 <td class="number-cell">${formatNumber(item.request_quantity)}</td>
                 <td class="message-cell">${escapeHtml(item.request_reason || "--")}</td>
                 <td>${statusBadge(item.audit_status)}</td>
-                <td>${escapeHtml(assignedWarehouse)}<small class="cell-subtitle">${item.audit_status === "approved" ? "审核后已进入分仓阶段" : "系统将按可用库存分配来源仓库"}</small></td>
-                <td>${escapeHtml(outboundLabel)}<small class="cell-subtitle">${item.generated_outbound_order_id ? "已生成出库单" : "待生成出库单"}</small></td>
+                <td>${escapeHtml(assignedWarehouse)}<small class="cell-subtitle">${assignmentNote}</small></td>
+                <td>${escapeHtml(outboundLabel)}<small class="cell-subtitle">${outboundNote}</small></td>
                 <td>${action}</td>
               </tr>`;
           })
@@ -1833,6 +1930,7 @@
       return;
     }
 
+    const currentUser = await ensureActiveUser();
     const configurations = {
       "complete-inbound": {
         request: () => API.completeInbound(id),
@@ -1846,17 +1944,17 @@
         },
       },
       "approve-request": {
-        request: () => API.approveReplenishment(id),
+        request: () => API.approveReplenishment(id, Number(currentUser?.id || 0)),
         success: "补货申请审核通过，可继续自动分仓生成出库单",
         reload: loadFulfillment,
       },
       "reject-request": {
-        request: () => API.rejectReplenishment(id),
+        request: () => API.rejectReplenishment(id, Number(currentUser?.id || 0)),
         success: "补货申请已拒绝，系统未生成出库单",
         reload: loadFulfillment,
       },
       "convert-request": {
-        request: () => API.convertReplenishment(id),
+        request: () => API.convertReplenishment(id, Number(currentUser?.id || 0)),
         success: (result) =>
           `已生成出库单 ${result.outbound_no || `#${result.outbound_order_id}`}，系统已分配来源仓库：${result.source_warehouse_name || warehouseName(result.source_warehouse_id)}`,
         reload: loadFulfillment,
@@ -1922,6 +2020,17 @@
     return value;
   }
 
+  function ensureSearchPickerValue(inputId, hiddenId, items, formatter, aliases = []) {
+    const matched = syncSearchPickerSelection(inputId, hiddenId, items, formatter, aliases);
+    if (matched) {
+      const input = $(inputId);
+      if (input) {
+        input.value = formatter(matched);
+      }
+    }
+    return matched;
+  }
+
   async function handleBaseDataCreate(form) {
     if (!canDo("create-base-data")) {
       showAlert("当前角色无权限操作", "warning");
@@ -1929,6 +2038,7 @@
     }
 
     const type = form.dataset.createForm;
+    const currentUser = await ensureActiveUser();
     const values = formValues(form);
     let boundProductId = null;
     let boundSupplierId = null;
@@ -2064,6 +2174,7 @@
       return;
     }
 
+    const currentUser = await ensureActiveUser();
     const values = formValues(form);
     const productId = requireSearchPickerValue("inboundProduct", "请选择有效的入库商品");
     const supplierId = requireSearchPickerValue("inboundSupplier", "请先选择商品，再选择匹配的供应商");
@@ -2075,7 +2186,7 @@
         API.createInboundOrder({
           supplier_id: supplierId,
           warehouse_id: Number(values.warehouse_id),
-          handled_by: Number(state.currentUser?.id || 1),
+          handled_by: Number(currentUser?.id || 0),
           status: "pending",
           remark: optionalValue(values.remark),
           items: [
@@ -2105,6 +2216,7 @@
       return;
     }
 
+    const currentUser = await ensureActiveUser();
     const values = formValues(form);
     const productId = requireSearchPickerValue("requestProduct", "请选择有效的补货商品");
     if (!productId) return;
@@ -2117,7 +2229,7 @@
           product_id: productId,
           request_quantity: Number(values.request_quantity),
           request_reason: optionalValue(values.request_reason),
-          created_by: Number(state.currentUser?.id || 1),
+          created_by: Number(currentUser?.id || 0),
         }),
       {
         loadingText: "提交中…",
@@ -2172,7 +2284,7 @@
 
   async function enterWorkspace(role, username = role) {
     state.currentRole = role;
-    state.currentUser = buildDemoUser(role, username);
+    state.currentUser = await resolveCurrentUser(role, username);
     state.currentView = defaultViewForRole();
     state.inventoryTab = "overview";
     state.lookupsLoaded = false;
@@ -2339,46 +2451,14 @@
       setInventoryOverviewPage(state.inventoryOverviewPage + 1);
     });
 
-    $("inboundProductSearch")?.addEventListener("input", () => {
-      const matched = syncSearchPickerSelection(
-        "inboundProductSearch",
-        "inboundProduct",
-        inboundProducts(),
-        productSearchLabel,
-        [(item) => item.name, (item) => item.product_code, (item) => String(item.id)],
-      );
-      if (matched) {
-        $("inboundProductSearch").value = productSearchLabel(matched);
-      }
-      refreshInboundSupplierPicker();
-    });
+    $("inboundProductSearch")?.addEventListener("input", syncInboundProductPicker);
+    $("inboundProductSearch")?.addEventListener("change", syncInboundProductPicker);
 
-    $("inboundSupplierSearch")?.addEventListener("input", () => {
-      const productId = Number($("inboundProduct")?.value || 0);
-      const matched = syncSearchPickerSelection(
-        "inboundSupplierSearch",
-        "inboundSupplier",
-        inboundSuppliersForProduct(productId),
-        supplierSearchLabel,
-        [(item) => item.name, (item) => String(item.id)],
-      );
-      if (matched) {
-        $("inboundSupplierSearch").value = supplierSearchLabel(matched);
-      }
-    });
+    $("inboundSupplierSearch")?.addEventListener("input", syncInboundSupplierPicker);
+    $("inboundSupplierSearch")?.addEventListener("change", syncInboundSupplierPicker);
 
-    $("requestProductSearch")?.addEventListener("input", () => {
-      const matched = syncSearchPickerSelection(
-        "requestProductSearch",
-        "requestProduct",
-        [...state.products.values()],
-        productSearchLabel,
-        [(item) => item.name, (item) => item.product_code, (item) => String(item.id)],
-      );
-      if (matched) {
-        $("requestProductSearch").value = productSearchLabel(matched);
-      }
-    });
+    $("requestProductSearch")?.addEventListener("input", syncRequestProductPicker);
+    $("requestProductSearch")?.addEventListener("change", syncRequestProductPicker);
 
     $("bindProductSearch")?.addEventListener("input", () => {
       const matched = syncSearchPickerSelection(

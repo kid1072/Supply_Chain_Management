@@ -64,6 +64,16 @@ def reject_request(db: Session, request_id: int, audited_by: int) -> Replenishme
     return request
 
 
+def invalidate_request(db: Session, request_id: int) -> ReplenishmentRequest | None:
+    request = db.get(ReplenishmentRequest, request_id)
+    if not request or request.audit_status != "approved" or request.generated_outbound_order_id is not None:
+        return request
+    request.audit_status = "invalidated"
+    request.generated_outbound_order_id = None
+    db.flush()
+    return request
+
+
 def convert_to_outbound(
     db: Session,
     request_id: int,

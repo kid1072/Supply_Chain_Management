@@ -1,6 +1,0 @@
-{
-  "name": "供应链库存协同与智能补货系统",
-  "description": "面向采购与运营管理人员的供应链库存协同管理、智能补货建议、异常监控与库存结构分析实时驾驶舱原型。",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import get_db_dep
+from app.core.db_errors import raise_product_integrity_error
 from app.core.exceptions import BusinessException
 from app.core.response import page_response, success_response
 from app.models.product import Product
@@ -25,9 +27,13 @@ def list_products(page: int = 1, page_size: int = 20, keyword: str | None = None
 
 @router.post("")
 def create_product(payload: ProductCreate, db: Session = Depends(get_db_dep)):
-    item = Product(**payload.model_dump())
-    db.add(item)
-    db.commit()
+    try:
+        item = Product(**payload.model_dump())
+        db.add(item)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise_product_integrity_error(exc)
     db.refresh(item)
     return success_response(ProductRead.model_validate(item).model_dump())
 
@@ -47,7 +53,11 @@ def update_product(product_id: int, payload: ProductUpdate, db: Session = Depend
         raise BusinessException("product not found", 404)
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(item, key, value)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise_product_integrity_error(exc)
     db.refresh(item)
     return success_response(ProductRead.model_validate(item).model_dump())
 

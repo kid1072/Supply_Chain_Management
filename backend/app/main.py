@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import IntegrityError
 
 from app.api.routers import (
     analytics,
@@ -27,6 +28,7 @@ from app.api.routers import (
     warehouses,
 )
 from app.core.config import get_settings
+from app.core.db_errors import map_integrity_error_message
 from app.core.exceptions import BusinessException
 from app.core.response import error_response
 
@@ -43,6 +45,11 @@ async def business_exception_handler(_request: Request, exc: BusinessException):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(_request: Request, exc: RequestValidationError):
     return JSONResponse(status_code=422, content=error_response(str(exc)))
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_exception_handler(_request: Request, exc: IntegrityError):
+    return JSONResponse(status_code=400, content=error_response(map_integrity_error_message(exc)))
 
 
 @app.exception_handler(Exception)

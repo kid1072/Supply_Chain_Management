@@ -414,7 +414,7 @@ def allocate_source_warehouses(
     )
     candidates = [inventory for inventory in inventories if get_available_quantity(inventory) > 0]
     if not candidates:
-        raise BusinessException("all warehouses are insufficient to fulfill the request")
+        raise BusinessException("所有仓库库存不足，无法生成出库单")
 
     single_candidates = [
         inventory for inventory in candidates if get_available_quantity(inventory) >= request_quantity
@@ -447,7 +447,7 @@ def allocate_source_warehouses(
         remaining -= allocated_quantity
 
     if remaining > 0:
-        raise BusinessException("all warehouses are insufficient to fulfill the request")
+        raise BusinessException("所有仓库库存不足，无法生成出库单")
     return allocations
 
 

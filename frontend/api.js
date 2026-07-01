@@ -99,12 +99,12 @@
     getInboundOrders: () => get("/inbound-orders?page=1&page_size=100"),
     completeInbound: (orderId) => post(`/inbound-orders/${orderId}/complete`),
     getReplenishmentRequests: () => get("/replenishment-requests?page=1&page_size=100"),
-    approveReplenishment: (requestId) =>
-      post(`/replenishment-requests/${requestId}/approve?audited_by=1`),
-    rejectReplenishment: (requestId) =>
-      post(`/replenishment-requests/${requestId}/reject?audited_by=1`),
-    convertReplenishment: (requestId) =>
-      post(`/replenishment-requests/${requestId}/convert-to-outbound?handled_by=1`),
+    approveReplenishment: (requestId, auditedBy) =>
+      post(`/replenishment-requests/${requestId}/approve?audited_by=${encodeURIComponent(auditedBy)}`),
+    rejectReplenishment: (requestId, auditedBy) =>
+      post(`/replenishment-requests/${requestId}/reject?audited_by=${encodeURIComponent(auditedBy)}`),
+    convertReplenishment: (requestId, handledBy) =>
+      post(`/replenishment-requests/${requestId}/convert-to-outbound?handled_by=${encodeURIComponent(handledBy)}`),
     getOutboundOrders: () => get("/outbound-orders?page=1&page_size=100"),
     shipOutbound: (orderId) => post(`/outbound-orders/${orderId}/ship`),
     signOutbound: (orderId) => post(`/outbound-orders/${orderId}/sign`),
@@ -112,6 +112,7 @@
     generateRecommendations: () => post("/recommendations/generate"),
     getRecommendations: () => get("/recommendations"),
     getSupplierRanking: () => get("/suppliers/ranking"),
+    getUsers: () => get("/users?page=1&page_size=200"),
     getProducts: () => get("/products?page=1&page_size=200"),
     createProduct: (payload) => post("/products", payload),
     getSuppliers: () => get("/suppliers?page=1&page_size=200"),

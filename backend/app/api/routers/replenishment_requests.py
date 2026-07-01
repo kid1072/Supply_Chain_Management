@@ -8,7 +8,13 @@ from app.core.response import page_response, success_response
 from app.models.outbound import OutboundOrder
 from app.models.replenishment import ReplenishmentRequest
 from app.schemas.replenishment import ReplenishmentRequestCreate, ReplenishmentRequestRead
-from app.services.replenishment_service import approve_request, convert_to_outbound, create_replenishment_request, reject_request
+from app.services.replenishment_service import (
+    approve_request,
+    convert_to_outbound,
+    create_replenishment_request,
+    invalidate_request,
+    reject_request,
+)
 from app.utils.pagination import normalize_pagination
 
 router = APIRouter(prefix="/api/replenishment-requests", tags=["replenishment-requests"])
@@ -173,4 +179,10 @@ def convert(
         )
     except Exception:
         db.rollback()
+        if source_warehouse_id is None:
+            try:
+                invalidate_request(db, request_id)
+                db.commit()
+            except Exception:
+                db.rollback()
         raise
