@@ -4,36 +4,37 @@
 
 项目通过需求分析和数据库建模，在商品、供应商、仓库、门店、采购订单、入库单、出库单、库存和库存流水等基础实体上，结合项目实际，补充了库存预警、门店补货申请、供应商管理与排行、统计分析、AI API 增强的智能补货建议、OceanBase 主数据库部署、系统状态检查、角色化演示界面和多端共享数据访问等内容。
 
-## Demo演示视频
-
-- [Demo视频](/docs/demo视频.mp4)
-
 ## 1. Repository Structure
 
 ```text
 Supply_Chain_Management/
 ├── backend/
 │   ├── app/
-│   │   ├── api/             # API 路由
-│   │   ├── core/            # 配置、数据库、响应、异常
-│   │   ├── models/          # SQLAlchemy 数据模型
-│   │   ├── schemas/         # Pydantic 请求和响应结构
-│   │   ├── services/        # 业务逻辑
-│   │   └── utils/           # 工具函数
-│   ├── docs/                # 后端文档
-│   ├── example/             # 示例 JSON 数据
-│   ├── schema/              # 数据库 schema 和 SQLite 文件
-│   ├── scripts/             # 初始化、导入、重置数据脚本
-│   ├── tests/               # 自动化测试
+│   │   ├── api/
+│   │   │   ├── deps.py                 # 路由依赖与通用注入
+│   │   │   └── routers/                # 按业务划分的 API 路由
+│   │   ├── core/                       # 配置、数据库连接、缓存、统一响应与异常处理
+│   │   ├── models/                     # SQLAlchemy 数据模型
+│   │   ├── schemas/                    # Pydantic 请求与响应模型
+│   │   ├── services/                   # 业务服务层
+│   │   │   └── llm/                    # LLM 路由与 DeepSeek、Ollama 适配实现
+│   │   ├── utils/                      # 日期、哈希、分页、数值处理等工具函数
+│   │   └── main.py                     # FastAPI 入口，挂载 API、Demo 页面与静态前端
+│   ├── docs/                           # 后端结构、部署与接口说明
+│   ├── example/                        # 示例主数据、业务单据、AI 推荐与外部数据样例
+│   ├── schema/                         # 数据库 schema、seed SQL 与本地 SQLite 文件
+│   ├── scripts/                        # 初始化、造数、重置演示数据脚本
+│   ├── tests/                          # 自动化测试，覆盖健康检查、登录、库存、补货、推荐、导入等流程
 │   ├── .env.example
 │   └── requirements.txt
-├── frontend/                # 前端演示页面
-│   ├── index.html           # 演示页面入口
-│   ├── api.js               # 统一请求封装
-│   ├── app.js               # 页面逻辑、角色控制、图表渲染
-│   ├── style.css            # 当前演示页面主样式
-│   └── styles.css           # 历史样式文件，保留
-├── docs/                    # 项目文档
+├── frontend/                           # 前端演示页面与静态资源
+│   ├── index.html                      # 演示入口与页面骨架
+│   ├── api.js                          # 统一 API 请求封装
+│   ├── app.js                          # 登录、角色视图、仪表盘与业务交互逻辑
+│   ├── style.css                       # 当前前端主样式
+│   └── styles.css                      # 兼容保留的历史样式文件
+├── docs/                               # 项目级文档、API 契约、OceanBase 说明
+├── requirements.txt                    # 根目录公共依赖清单
 └── README.md
 ```
 
@@ -182,15 +183,7 @@ POST /api/users/login
 7. 生成 AI 补货建议，查看推荐数量、风险等级、推荐理由和采用状态。
 8. 打开 `/docs`，测试用户登录、商品新增、库存调整、补货建议采用或拒绝等接口。
 
-## 4. Demo 视频
-
-Demo 视频用于展示系统从启动、登录、看板查看到采购入库、门店补货、出库签收和 AI 补货建议的完整业务流程。
-
-```text
-Demo 视频：待补充
-```
-
-## 5. 多电脑共享访问
+## 4. 多电脑共享访问
 
 如果希望一台电脑新增或修改数据后，其他电脑也能看到，需要让所有电脑访问同一个后端服务和同一个数据库。
 
@@ -216,7 +209,7 @@ API 文档：http://192.168.1.23:8000/docs
 - 多电脑演示时不能每个人各自运行一套本地后端。
 - 推荐使用 OceanBase/MySQL 作为共享数据库；SQLite 仅作为本地开发或应急排查时的回退数据库。
 
-## 6. OceanBase 说明
+## 5. OceanBase 说明
 
 OceanBase 在本项目中作为主数据库服务，不是网站部署平台。系统通过 SQLAlchemy + PyMySQL 接入 OceanBase 的 MySQL 兼容协议，并通过数据库健康检查接口展示当前运行模式。
 
@@ -235,7 +228,7 @@ SQLITE_FALLBACK_URL=sqlite:///./schema/supply_chain.db
 
 SQLite 保留为应急回退数据库，用于本地开发、环境排查或主数据库临时不可连接时的保底运行。
 
-## 7. AI API 说明
+## 6. AI API 说明
 
 系统已接入 LLM 路由层，可根据 `backend/.env` 配置选择 DeepSeek、Ollama 或规则模型。AI API 用于对补货建议理由和经营摘要进行文本增强；库存预警、补货数量和风险等级仍由系统规则模型计算，因此 AI 服务不可用时，核心业务流程仍可运行。
 
@@ -321,7 +314,7 @@ GET http://127.0.0.1:8000/api/recommendations
 
 
 
-## 8. 相关文档
+## 7. 相关文档
 
 - [接口契约](/docs/接口契约.md)
 - [OceanBase 简介](/docs/OceanBase简介.md)

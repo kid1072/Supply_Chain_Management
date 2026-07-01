@@ -24,40 +24,6 @@
 → 供应商评分与统计分析
 ```
 
-## 22. Walmart 外部数据状态接口
-
-### 22.1 `GET /api/external-data/walmart/status`
-
-- 用途：查看 Walmart 外部销售数据是否已导入，以及当前实际运行数据库模式。
-- 成功响应：
-
-```json
-{
-  "success": true,
-  "message": "ok",
-  "data": {
-    "raw_weekly_sales_count": 0,
-    "monthly_sales_fact_count": 0,
-    "store_count": 0,
-    "department_product_count": 0,
-    "min_sales_date": null,
-    "max_sales_date": null,
-    "database_runtime": {
-      "mode": "oceanbase-primary",
-      "active_dialect": "mysql"
-    }
-  }
-}
-```
-
-- `raw_weekly_sales_count`：`walmart_weekly_sales_facts` 中的 Walmart 周销售事实行数。
-- `monthly_sales_fact_count`：写入 `monthly_sales_facts` 且 `is_example_data=false` 的 Walmart 月销售事实行数。
-- `store_count`：`walmart_store_profiles` 中的 Walmart 门店数。
-- `department_product_count`：映射到现有 `products` 的 Walmart 部门商品数。
-- `min_sales_date` / `max_sales_date`：Walmart 周事实最早和最晚销售日期。
-- `database_runtime.mode`：当前数据库模式，可能是 `oceanbase-primary` 或 `sqlite-fallback`。
-- `database_runtime.active_dialect`：当前 SQLAlchemy 实际方言，例如 `mysql` 或 `sqlite`。
-
 本契约不覆盖完整登录注册、复杂权限系统、完整企业级审批流。
 
 ---

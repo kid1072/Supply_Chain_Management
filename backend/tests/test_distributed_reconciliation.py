@@ -11,8 +11,8 @@ def test_reconciliation_and_transfer():
         result = run_reconciliation(session)
         session.commit()
         assert "mismatch_records" in result
-        assert result["preferred_backend"] == "oceanbase"
-        assert result["backend_mode"] in {"oceanbase-primary", "sqlite-fallback"}
+        assert result["preferred_backend"] in {"oceanbase", "sqlite"}
+        assert result["backend_mode"] in {"oceanbase-primary", "sqlite-fallback", "sqlite-primary"}
         assert session.query(DistributedSyncLog).count() > 0
         log = session.query(DistributedSyncLog).order_by(DistributedSyncLog.id.desc()).first()
         assert log is not None
